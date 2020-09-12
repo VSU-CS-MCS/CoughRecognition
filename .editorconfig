@@ -1,0 +1,18 @@
+# Editor configuration, see https://editorconfig.org
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_size = 4
+
+[*.{js,ts,json,less,.yml}]
+indent_size = 2
+
+[*.{md,diff}]
+max_line_length = off
+trim_trailing_whitespace = false
