@@ -4,18 +4,9 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.util.Log
-import java.io.BufferedReader
 import java.io.IOException
 import java.util.*
 import javax.inject.Inject
-
-data class CoughDeviceData(
-    val xs: Int,
-    val ys: Int,
-    val x: Int,
-    val y: Int,
-    val adc: Int,
-)
 
 enum class CoughDeviceError {
     BluetoothDisabled,
