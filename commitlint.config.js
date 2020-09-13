@@ -4,5 +4,12 @@ module.exports = {
   ],
   rules: {
     'scope-case': [0],
+    'scope-enum': [
+      2,
+      'always',
+      [
+        'CoughExtractor'
+      ],
+    ],
   },
 };
