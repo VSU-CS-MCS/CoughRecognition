@@ -18,7 +18,9 @@ val coughDeviceId = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 const val coughDeviceName = "HC-COUGH"
 const val TAG = "CoughDevice"
 
-class CoughDevice @Inject constructor() {
+class CoughDevice @Inject constructor(
+    private val parser: CoughDeviceDataParser,
+) {
 
     private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var connectThread: ConnectThread? = null
@@ -84,6 +86,11 @@ class CoughDevice @Inject constructor() {
                     } catch (e: Throwable) {
                         Log.e(TAG, "Couldn't read data", e)
                         break
+                    }
+                    val deviceData = try {
+                        parser.parseLine(line)
+                    } catch (e: Throwable) {
+                        Log.e(TAG, "Couldn't parse data", e)
                     }
                     Log.v(TAG, line)
                 }

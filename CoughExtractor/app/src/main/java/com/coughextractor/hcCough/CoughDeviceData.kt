@@ -1,9 +1,30 @@
 package com.coughextractor.hcCough
 
+import java.time.Instant
+
 data class CoughDeviceData(
-    val xs: Int,
-    val ys: Int,
-    val x: Int,
-    val y: Int,
-    val adc: Int,
+    /**
+     * X Acceleration
+     */
+    val accelerationX: Int,
+    /**
+     * Y Acceleration
+     */
+    val accelerationY: Int,
+    /**
+     * X Angle
+     */
+    val angleX: Int,
+    /**
+     * Y Angle
+     */
+    val angleY: Int,
+    /**
+     * Breathing
+     */
+    val breathing: Int,
+    /**
+     * Timestamp
+     */
+    val timestamp: Instant = Instant.now()
 )
