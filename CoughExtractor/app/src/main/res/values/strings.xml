@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">CoughExtractor</string>
+
+    <string name="chart_amplitude_label">Амплитуда звука</string>
 </resources>

@@ -1,4 +1,4 @@
-package com.coughextractor.hcCough
+package com.coughextractor.device
 
 import java.time.Instant
 

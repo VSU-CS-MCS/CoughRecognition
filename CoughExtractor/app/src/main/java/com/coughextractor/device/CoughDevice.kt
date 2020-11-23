@@ -1,4 +1,4 @@
-package com.coughextractor.hcCough
+package com.coughextractor.device
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -21,6 +21,8 @@ const val TAG = "CoughDevice"
 class CoughDevice @Inject constructor(
     private val parser: CoughDeviceDataParser,
 ) {
+
+    val deviceId = "0"
 
     private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var connectThread: ConnectThread? = null
