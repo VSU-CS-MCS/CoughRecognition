@@ -1,4 +1,4 @@
-package com.coughextractor.hcCough
+package com.coughextractor.device
 
 import java.util.*
 import javax.inject.Inject
@@ -16,10 +16,10 @@ class CoughDeviceDataParser @Inject constructor() {
             .toMap()
 
         return CoughDeviceData(
-            keyValues["Xa"]!!.toInt(),
-            keyValues["Ya"]!!.toInt(),
-            keyValues["X"]!!.toInt(),
-            keyValues["Y"]!!.toInt(),
-            keyValues["ADC"]!!.toInt())
+            (keyValues["Xa"] ?: error("Missing Xa")).toInt(),
+            (keyValues["Ya"] ?: error("Missing Ya")).toInt(),
+            (keyValues["X"] ?: error("Missing X")).toInt(),
+            (keyValues["Y"] ?: error("Missing Y")).toInt(),
+            (keyValues["ADC"] ?: error("Missing ADC")).toInt())
     }
 }
