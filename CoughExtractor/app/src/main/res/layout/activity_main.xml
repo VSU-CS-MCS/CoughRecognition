@@ -1,34 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layout
+<layout xmlns:tools="http://schemas.android.com/tools"
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <data>
         <variable name="viewModel" type="com.coughextractor.MainViewModel"/>
+        <variable name="Converter" type="com.coughextractor.mvvm.Converter"/>
     </data>
     <androidx.constraintlayout.widget.ConstraintLayout
-        xmlns:tools="http://schemas.android.com/tools"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         tools:context=".MainActivity">
         <TextView
-            android:id="@+id/textView"
+            android:id="@+id/textViewAmplitude"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:layout_constraintTop_toTopOf="parent"
             android:text="@string/chart_amplitude_label" />
 
-        <com.github.mikephil.charting.charts.LineChart
-            android:id="@+id/chart"
+        <EditText
+            android:id="@+id/editText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:layout_constraintTop_toBottomOf="@+id/textView" />
+            app:layout_constraintTop_toBottomOf="@+id/textViewAmplitude"
+            android:inputType="number"
+            android:text="@={viewModel.amplitude}" />
+
+        <TextView
+            android:id="@+id/textViewMaxAmplitude"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/chart_max_amplitude_label"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/editText" />
+
+        <TextView
+            android:id="@+id/textViewMaxAmplitudeValue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintTop_toBottomOf="@+id/editText"
+            app:layout_constraintLeft_toRightOf="@+id/textViewMaxAmplitude"
+            android:text="@{viewModel.maxAmplitude}"/>
 
         <ImageButton
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:onClick="@{() -> viewModel.powerClick()}"
             android:src="@drawable/ic_power_24"
-            app:layout_constraintTop_toBottomOf="@+id/chart"
+            app:layout_constraintTop_toBottomOf="@+id/editText"
             app:layout_constraintBottom_toBottomOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 </layout>

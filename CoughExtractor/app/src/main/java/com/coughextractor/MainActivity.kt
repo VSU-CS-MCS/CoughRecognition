@@ -42,9 +42,10 @@ class MainActivity() : ComponentActivity(), CoroutineScope {
         viewModel.baseDir = externalCacheDir?.absolutePath ?: ""
 
         requestPermissions(permissions, REQUEST_PERMISSION_CODE)
-        val binding: ActivityMainBinding = DataBindingUtil.setContentView(
-            this, R.layout.activity_main)
+
+        val binding: ActivityMainBinding = DataBindingUtil.setContentView(this, R.layout.activity_main)
         binding.viewModel = viewModel
+        binding.lifecycleOwner = this
         job = Job()
     }
 
