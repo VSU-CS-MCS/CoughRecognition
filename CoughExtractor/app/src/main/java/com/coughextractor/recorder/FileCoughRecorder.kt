@@ -2,10 +2,12 @@ package com.coughextractor.recorder
 
 import android.media.MediaRecorder
 import android.util.Log
+import androidx.lifecycle.MutableLiveData
 import java.io.IOException
 import java.util.*
 import javax.inject.Inject
 import kotlin.concurrent.timer
+import kotlin.properties.Delegates
 
 private const val TAG = "FileCoughRecorder"
 
@@ -13,9 +15,11 @@ class FileCoughRecorder @Inject constructor() : CoughRecorder {
 
     private var recorder: MediaRecorder? = null
 
-    var filePath: String = ""
-
     override var isRecording = false
+    override var sampleRate: Int = 48000
+    override var fileName: String = ""
+    override var fileExtension: String = ""
+    override lateinit var onMaxAmplitudeUpdate: (maxAmplitude: String) -> Unit
 
     override fun start() {
         if (isRecording) {
@@ -26,7 +30,7 @@ class FileCoughRecorder @Inject constructor() : CoughRecorder {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.DEFAULT)
             setAudioEncoder(MediaRecorder.AudioEncoder.HE_AAC)
-            setAudioSamplingRate(48000)
+            setAudioSamplingRate(sampleRate)
 
             Log.i(TAG, "file path $filePath")
             setOutputFile(filePath)
@@ -38,12 +42,12 @@ class FileCoughRecorder @Inject constructor() : CoughRecorder {
             start()
         }
 
-        timer("RecorderTimer", period = 1) {
-            if (this@FileCoughRecorder.recorder == null) {
+        timer("RecorderTimer", period = 5000) {
+            val recorder = this@FileCoughRecorder.recorder
+            if (recorder == null) {
                 this.cancel()
             } else {
-                TODO("add value to chart data")
-                TODO("trigger extract 3 secs before and after")
+                onMaxAmplitudeUpdate(recorder.maxAmplitude.toString())
             }
         }
 
