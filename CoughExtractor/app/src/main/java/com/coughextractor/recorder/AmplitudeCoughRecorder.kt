@@ -9,14 +9,12 @@ import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
-
 private const val TAG = "AmplitudeCoughRecorder"
 
 class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder {
 
     override var isRecording: Boolean = false
-    override var sampleRate: Int = 48000
-    var bitRate = 64 * 1024
+
     override var fileName: String = ""
     override var fileExtension: String = ""
     override lateinit var onMaxAmplitudeUpdate: (maxAmplitude: String) -> Unit
@@ -25,14 +23,22 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder {
 
     private var audioRecorder: AudioRecord? = null
     private var recordingThread: ReadThread? = null
-    private val channelConfig: Int = AudioFormat.CHANNEL_IN_MONO
+
     private val channelCount = 1
+    override var sampleRate: Int = 48000
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-    private val audioBufferSize: Int = AudioRecord.getMinBufferSize(
+    private val bytesPerSample = 2 // depends on audioFormat
+
+    private val bitRate = sampleRate * channelCount * bytesPerSample
+
+    private val channelConfig: Int = AudioFormat.CHANNEL_IN_MONO
+
+    val audioBufferSize: Int = AudioRecord.getMinBufferSize(
         sampleRate,
         channelConfig,
         audioFormat
     )
+    val recordBufferSize = 6 * sampleRate / audioBufferSize * audioBufferSize
     private val audioMimeType = "audio/mp4a-latm"
 
     override fun start() {
@@ -90,7 +96,6 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder {
         override fun run() {
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
 
-            val recordBufferSize = 6 * sampleRate / audioBufferSize * audioBufferSize
             val shortBuffer = ShortArray(recordBufferSize)
             var shortBufferOffset = 0
             var recordEndOffset: Int? = null
