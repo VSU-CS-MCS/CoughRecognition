@@ -210,7 +210,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder {
                                 presentationTimeUs,
                                 0
                             )
-                            presentationTimeUs = 1000000L * (totalBytesRead / 2) / sampleRate;
+                            presentationTimeUs += 1000000L * (bytesRead / 2) / sampleRate;
                         }
                     }
 
