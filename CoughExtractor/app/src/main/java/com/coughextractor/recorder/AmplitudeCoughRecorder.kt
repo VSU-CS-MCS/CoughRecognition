@@ -127,6 +127,8 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder {
                     }
 
                     if (recordEndOffset == shortBufferOffset) {
+                        recordEndOffset = null
+
                         val byteBuffer = ByteBuffer.allocateDirect(recordBufferSize * 2)
 
                         for (short in shortBuffer.slice(shortBufferOffset until recordBufferSize)) {
