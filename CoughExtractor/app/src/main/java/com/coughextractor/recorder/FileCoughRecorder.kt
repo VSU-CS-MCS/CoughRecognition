@@ -2,16 +2,16 @@ package com.coughextractor.recorder
 
 import android.media.MediaRecorder
 import android.util.Log
-import androidx.lifecycle.MutableLiveData
+
 import java.io.IOException
 import java.util.*
 import javax.inject.Inject
+
 import kotlin.concurrent.timer
-import kotlin.properties.Delegates
 
 private const val TAG = "FileCoughRecorder"
 
-class FileCoughRecorder @Inject constructor() : CoughRecorder {
+class FileCoughRecorder @Inject constructor() : CoughRecorder<Int> {
 
     private var recorder: MediaRecorder? = null
 
@@ -19,7 +19,7 @@ class FileCoughRecorder @Inject constructor() : CoughRecorder {
     override var sampleRate: Int = 48000
     override var fileName: String = ""
     override var fileExtension: String = ""
-    override lateinit var onMaxAmplitudeUpdate: (maxAmplitude: String) -> Unit
+    override lateinit var onAmplitudesUpdate: (amplitudes: Array<Int>) -> Unit
 
     override fun start() {
         if (isRecording) {
@@ -42,12 +42,12 @@ class FileCoughRecorder @Inject constructor() : CoughRecorder {
             start()
         }
 
-        timer("RecorderTimer", period = 5000) {
+        timer("RecorderTimer", period = 10) {
             val recorder = this@FileCoughRecorder.recorder
             if (recorder == null) {
                 this.cancel()
             } else {
-                onMaxAmplitudeUpdate(recorder.maxAmplitude.toString())
+                onAmplitudesUpdate(arrayOf(recorder.maxAmplitude))
             }
         }
 
