@@ -118,7 +118,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder {
                     val maxValue = readData.maxOrNull()
 
                     val amplitudeThreshold = amplitudeThreshold
-                    if (amplitudeThreshold != null && maxValue != null && maxValue > amplitudeThreshold) {
+                    if (recordEndOffset == null && amplitudeThreshold != null && maxValue != null && maxValue > amplitudeThreshold) {
                         recordEndOffset = shortBufferOffset + recordBufferSize / 2
                         if (recordEndOffset > recordBufferSize) {
                             recordEndOffset -= recordBufferSize
