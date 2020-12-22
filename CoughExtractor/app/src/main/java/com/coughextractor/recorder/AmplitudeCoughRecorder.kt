@@ -29,16 +29,26 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder {
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
     private val bytesPerSample = 2 // depends on audioFormat
 
-    private val bitRate = sampleRate * channelCount * bytesPerSample
+    private val aacProfile = MediaCodecInfo.CodecProfileLevel.AACObjectLC
+    private val outputBitRate = sampleRate * channelCount * bytesPerSample
 
     private val channelConfig: Int = AudioFormat.CHANNEL_IN_MONO
 
+    /**
+     * Amount of amplitudes to read per AudioRecord.read call
+     */
     val audioBufferSize: Int = AudioRecord.getMinBufferSize(
         sampleRate,
         channelConfig,
         audioFormat
     )
-    val recordBufferSize = 6 * sampleRate / audioBufferSize * audioBufferSize
+    val audioBufferByteSize: Int = audioBufferSize * bytesPerSample
+    val audioSamplesCount = 6 * sampleRate / audioBufferSize
+    /**
+     * Amount of amplitudes to store per recording
+     */
+    val recordBufferSize = audioSamplesCount * audioBufferSize
+    val recordBufferByteSize = audioSamplesCount * audioBufferByteSize
     private val audioMimeType = "audio/mp4a-latm"
 
     override fun start() {
@@ -105,8 +115,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder {
                     val result: Int = audioRecorder!!.read(
                         shortBuffer,
                         shortBufferOffset,
-                        audioBufferSize
-                    )
+                        audioBufferSize)
                     if (result < 0) {
                         throw RuntimeException(
                             "Reading of audio buffer failed: ${getBufferReadFailureReason(result)} $shortBufferOffset $audioBufferSize"
@@ -167,11 +176,9 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder {
                 sampleRate,
                 channelCount,
             )
-            outputFormat.setInteger(
-                MediaFormat.KEY_AAC_PROFILE,
-                MediaCodecInfo.CodecProfileLevel.AACObjectHE
-            )
-            outputFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
+            outputFormat.setInteger(MediaFormat.KEY_BIT_RATE, outputBitRate)
+            outputFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, aacProfile)
+            outputFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, audioBufferByteSize)
 
             var presentationTimeUs = 0L
             var totalBytesRead = 0L
@@ -194,15 +201,23 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder {
                         }
 
                         val dstBuf: ByteBuffer = codec.getInputBuffer(inputBufferId)!!
-                        val tempBuffer = ByteArray(dstBuf.capacity())
-                        val bytesRead: Int = it.read(tempBuffer, 0, dstBuf.limit())
+
+                        val tempBuffer = ByteArray(audioBufferByteSize)
+                        val bytesRead: Int = it.read(
+                            tempBuffer,
+                            0,
+                            audioBufferByteSize)
 
                         if (bytesRead == -1) {
-                            codec.queueInputBuffer(inputBufferId, 0, 0, presentationTimeUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            codec.queueInputBuffer(
+                                inputBufferId,
+                                0,
+                                0,
+                                presentationTimeUs,
+                                MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             isInputEOS = true
                         } else {
-                            totalBytesRead += bytesRead
-                            dstBuf.put(tempBuffer, 0, bytesRead);
+                            dstBuf.put(tempBuffer, 0, bytesRead)
                             codec.queueInputBuffer(
                                 inputBufferId,
                                 0,
@@ -211,6 +226,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder {
                                 0
                             )
                             presentationTimeUs += 1000000L * (bytesRead / 2) / sampleRate;
+                            totalBytesRead += bytesRead
                         }
                     }
 
