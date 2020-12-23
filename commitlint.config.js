@@ -11,5 +11,6 @@ module.exports = {
         'CoughExtractor'
       ],
     ],
+    'header-max-length': [1, "always", 140]
   },
 };
