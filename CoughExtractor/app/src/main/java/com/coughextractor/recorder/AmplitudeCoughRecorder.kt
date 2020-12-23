@@ -1,12 +1,11 @@
 package com.coughextractor.recorder
 
 import android.media.*
+import android.media.AudioTrack
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
 import android.util.Log
-import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 
 import java.io.ByteArrayInputStream
 import java.io.IOException
@@ -14,6 +13,11 @@ import java.nio.ByteBuffer
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
+
+import kotlin.collections.ArrayList
+import kotlin.experimental.and
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 
 private const val TAG = "AmplitudeCoughRecorder"
 
@@ -33,12 +37,11 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
     private val channelCount = 1
     override var sampleRate: Int = 48000
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+    private val channelConfig: Int = AudioFormat.CHANNEL_IN_MONO
     private val bytesPerSample = 2 // depends on audioFormat
 
     private val aacProfile = MediaCodecInfo.CodecProfileLevel.AACObjectLC
     private val outputBitRate = sampleRate * channelCount * bytesPerSample
-
-    private val channelConfig: Int = AudioFormat.CHANNEL_IN_MONO
 
     /**
      * Amount of amplitudes to read per AudioRecord.read call
@@ -48,21 +51,29 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
         channelConfig,
         audioFormat
     )
-    val audioBufferByteSize: Int = audioBufferSize * bytesPerSample
-    val audioSamplesCount = 6 * sampleRate / audioBufferSize
+
     /**
-     * Amount of amplitudes to store per recording
+     * Amount of bytes to read per AudioRecord.read call
      */
-    val recordBufferSize = audioSamplesCount * audioBufferSize
-    val recordBufferByteSize = audioSamplesCount * audioBufferByteSize
+    val audioBufferByteSize: Int = audioBufferSize * bytesPerSample
+
+    /**
+     * Max amount of Audio.read calls per recording
+     */
+    val maxRecordReadCalls = 6 * sampleRate / audioBufferSize
+
+    /**
+     * Max amount of amplitudes to store per recording
+     */
+    val maxRecordBufferSize = maxRecordReadCalls * audioBufferSize
     private val audioMimeType = "audio/mp4a-latm"
 
-    private val audioRecordDataChannel = Channel<Pair<ShortArray, Long>>()
+    private val audioRecordDataChannel = Channel<Pair<ShortArray, Long>>(Channel.BUFFERED)
     private var audioRecordDataHandlerJob: Job? = null
 
     override fun start() {
         if (isRecording) {
-            return;
+            return
         }
 
         val audioRecorder = AudioRecord(
@@ -111,8 +122,8 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
         }
 
         if (audioRecorder.state != AudioRecord.STATE_INITIALIZED) {
-            Log.e(TAG, "Audio Record can't initialize!");
-            return;
+            Log.e(TAG, "Audio Record can't initialize!")
+            return
         }
 
         audioRecorder.startRecording()
@@ -150,7 +161,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
         val recordingThread = this.recordingThread
         if (recordingThread != null) {
             recordingThread.interrupt()
-            this.recordingThread = null;
+            this.recordingThread = null
         }
 
         val recorder = this.audioRecorder
@@ -164,54 +175,96 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
     }
 
     private inner class AudioRecordDataHandler() {
-        val shortBuffer = ShortArray(recordBufferSize)
+        val shortBuffer = ShortArray(maxRecordBufferSize)
+        val timeNsBuffer = LongArray(maxRecordBufferSize / audioBufferSize)
         var shortBufferOffset = 0
+        val timeNsOffset
+            get() = shortBufferOffset / audioBufferSize
         var recordEndOffset: Int? = null
+
+        fun Short.reverseBytes(): Short {
+            val v0 = ((this.toInt() ushr 0) and 0xFF)
+            val v1 = ((this.toInt() ushr 8) and 0xFF)
+            return ((v1 and 0xFF) or (v0 shl 8)).toShort()
+        }
 
         fun handleData(data: ShortArray, timeNs: Long) {
             data.copyInto(shortBuffer, shortBufferOffset)
+            timeNsBuffer[timeNsOffset] = timeNs
 
-            val readDataIndices = shortBufferOffset until shortBufferOffset+audioBufferSize
+            val readDataIndices = shortBufferOffset until shortBufferOffset + audioBufferSize
             val readData = shortBuffer.slice(readDataIndices)
             val maxValue = readData.maxOrNull()
 
             val amplitudeThreshold = amplitudeThreshold
-            var recordEndOffset = this.recordEndOffset
+            val recordEndOffset = this.recordEndOffset
             if (recordEndOffset == null && amplitudeThreshold != null && maxValue != null && maxValue > amplitudeThreshold) {
-                recordEndOffset = shortBufferOffset + recordBufferSize / 2
-                if (recordEndOffset > recordBufferSize) {
-                    recordEndOffset -= recordBufferSize
+                var timeNsEndOffset = timeNsOffset + (maxRecordReadCalls / 2) - 1
+                if (timeNsEndOffset >= maxRecordReadCalls) {
+                    timeNsEndOffset -= maxRecordReadCalls
                 }
-                recordEndOffset = recordEndOffset / audioBufferSize * audioBufferSize
-            }
+                this.recordEndOffset = timeNsEndOffset * audioBufferSize
+            } else if (recordEndOffset == shortBufferOffset) {
+                this.recordEndOffset = null
 
-            if (recordEndOffset == shortBufferOffset) {
-                recordEndOffset = null
+                // In case recording has just started we store a lesser recording
+                val firstZeroValueIndex = timeNsBuffer.indexOfFirst { it == 0L }
+                val recordAudioSamplesCount: Int
+                val recordAudioBufferSize: Int
 
-                val byteBuffer = ByteBuffer.allocateDirect(recordBufferSize * 2)
-
-                for (short in shortBuffer.slice(shortBufferOffset until recordBufferSize)) {
-                    byteBuffer.putShort(short)
+                if (firstZeroValueIndex == -1) {
+                    recordAudioSamplesCount = maxRecordReadCalls
+                    recordAudioBufferSize = maxRecordBufferSize
+                } else {
+                    recordAudioSamplesCount = firstZeroValueIndex
+                    recordAudioBufferSize = firstZeroValueIndex * audioBufferSize
                 }
-                if (shortBufferOffset != 0) {
-                    for (short in shortBuffer.slice(0 until shortBufferOffset)) {
-                        byteBuffer.putShort(short)
-                    }
+
+                val timeNsInChronologicalOrder = LongArray(recordAudioSamplesCount)
+                val byteBuffer = ByteBuffer.allocateDirect(recordAudioBufferSize * bytesPerSample)
+
+                val timeNsOffsetPart = timeNsOffset + 1
+                val dataOffsetPart = timeNsOffsetPart * audioBufferSize
+
+                timeNsBuffer.copyInto(
+                    timeNsInChronologicalOrder,
+                    0,
+                    timeNsOffsetPart,
+                    recordAudioSamplesCount
+                )
+                timeNsBuffer.copyInto(
+                    timeNsInChronologicalOrder,
+                    recordAudioSamplesCount - timeNsOffsetPart,
+                    0,
+                    timeNsOffsetPart
+                )
+
+                val shortToByteArray = { it: Short ->
+                    val b = ByteArray(2)
+                    b[0] = (it and 0x00FF).toByte()
+                    b[1] = (it.toInt().shr(8) and 0x000000FF) as Byte
+                    b
+                }
+
+                for (short in shortBuffer.slice(dataOffsetPart until recordAudioBufferSize)) {
+                    byteBuffer.putShort(short.reverseBytes())
+                }
+                for (short in shortBuffer.slice(0 until dataOffsetPart)) {
+                    byteBuffer.putShort(short.reverseBytes())
                 }
 
                 GlobalScope.launch {
-                    AudioSaver().saveToFile(byteBuffer)
+                    AudioSaver().saveToFile(byteBuffer, timeNsInChronologicalOrder)
                 }
             }
 
             onAmplitudesUpdate(readData.toTypedArray())
 
-            if (shortBufferOffset + audioBufferSize >= recordBufferSize) {
+            if (shortBufferOffset + audioBufferSize >= maxRecordBufferSize) {
                 shortBufferOffset = 0
             } else {
                 shortBufferOffset += audioBufferSize
             }
-            this.recordEndOffset = recordEndOffset
         }
     }
 
@@ -224,13 +277,20 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
 
             try {
                 loop@ while (isRecording.get()) {
-                    val audioPresentationTimeNs = System.nanoTime();
+                    val audioPresentationTimeNs = System.nanoTime()
                     val result: Int = audioRecorder!!.read(
                         shortBuffer,
                         0,
-                        audioBufferSize)
+                        audioBufferSize
+                    )
                     if (result < 0) {
-                        throw RuntimeException("Reading of audio buffer failed: ${getBufferReadFailureReason(result)} $audioBufferSize")
+                        throw RuntimeException(
+                            "Reading of audio buffer failed: ${
+                                getBufferReadFailureReason(
+                                    result
+                                )
+                            } $audioBufferSize"
+                        )
                     }
 
                     try {
@@ -251,7 +311,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
             super.interrupt()
         }
 
-        private fun getBufferReadFailureReason(errorCode: Int): String? {
+        private fun getBufferReadFailureReason(errorCode: Int): String {
             return when (errorCode) {
                 AudioRecord.ERROR_INVALID_OPERATION -> "ERROR_INVALID_OPERATION"
                 AudioRecord.ERROR_BAD_VALUE -> "ERROR_BAD_VALUE"
@@ -263,7 +323,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
     }
 
     private inner class AudioSaver {
-        fun saveToFile(byteBuffer: ByteBuffer) {
+        fun saveToFile(byteBuffer: ByteBuffer, timeNsBuffer: LongArray) {
             val muxer = MediaMuxer(
                 "${fileName}_${Date()}.$fileExtension",
                 MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
@@ -272,20 +332,27 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
             var outputFormat = MediaFormat.createAudioFormat(
                 audioMimeType,
                 sampleRate,
-                channelCount,
+                channelCount
             )
             outputFormat.setInteger(MediaFormat.KEY_BIT_RATE, outputBitRate)
             outputFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, aacProfile)
             outputFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, audioBufferByteSize)
+            outputFormat.setInteger(MediaFormat.KEY_PCM_ENCODING, audioFormat)
 
-            var presentationTimeUs = 0L
-            var totalBytesRead = 0L
+            var totalRecordRead = 0
             var audioTrackIdx = 0
             var isEncoded = false
+            var isWritten = false
 
-            val lock = Object()
+            val codecWaitingLock = Object()
+            val outputBufferChannel =
+                Channel<Pair<ByteBuffer, MediaCodec.BufferInfo>>(Channel.BUFFERED)
 
-            ByteArrayInputStream(byteBuffer.array()).use {
+            val timeUsBuffer = timeNsBuffer.map {
+                (it - timeNsBuffer[0]) / 1000
+            }
+
+            ByteArrayInputStream(byteBuffer.array(), 0, byteBuffer.position()).use {
                 codec.setCallback(object : MediaCodec.Callback() {
                     var isInputEOS = false
                     var isOutputEOS = false
@@ -312,21 +379,21 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
                                 inputBufferId,
                                 0,
                                 0,
-                                presentationTimeUs,
+                                timeNsBuffer[timeNsBuffer.count() - 1] + 1,
                                 MediaCodec.BUFFER_FLAG_END_OF_STREAM
                             )
                             isInputEOS = true
                         } else {
                             dstBuf.put(tempBuffer, 0, bytesRead)
+
                             codec.queueInputBuffer(
                                 inputBufferId,
                                 0,
                                 bytesRead,
-                                presentationTimeUs,
+                                timeUsBuffer[totalRecordRead],
                                 0
                             )
-                            presentationTimeUs += 1000000L * (bytesRead / 2) / sampleRate;
-                            totalBytesRead += bytesRead
+                            totalRecordRead += 1
                         }
                     }
 
@@ -343,7 +410,24 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
                         if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0 && info.size != 0) {
                             codec.releaseOutputBuffer(outputBufferId, false)
                         } else {
-                            muxer.writeSampleData(audioTrackIdx, encodedData, info)
+                            // Handles out of order codec output
+                            val outputData = ByteBuffer.allocateDirect(encodedData.capacity())
+                            outputData.put(encodedData)
+                            outputData.limit(encodedData.limit())
+                            outputData.position(encodedData.position())
+
+                            val outputInfo = MediaCodec.BufferInfo()
+                            outputInfo.set(
+                                info.offset,
+                                info.size,
+                                info.presentationTimeUs,
+                                info.flags
+                            )
+
+                            runBlocking {
+                                outputBufferChannel.send(Pair(outputData, outputInfo))
+                            }
+
                             codec.releaseOutputBuffer(outputBufferId, false)
                         }
 
@@ -358,37 +442,65 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
                         format: MediaFormat
                     ) {
                         outputFormat = codec.outputFormat
-                        Log.v("AUDIO", "Output format changed - $outputFormat");
-                        audioTrackIdx = muxer.addTrack(outputFormat);
-                        muxer.start();
+                        audioTrackIdx = muxer.addTrack(outputFormat)
+                        muxer.start()
+                        Log.v("AUDIO", "Output format changed - $outputFormat")
                     }
 
                     override fun onError(
                         codec: MediaCodec,
                         e: MediaCodec.CodecException
                     ) {
-                        Log.e(
-                            "AUDIO",
-                            "Codec error ${e.diagnosticInfo}"
-                        )
+                        Log.e("AUDIO", "Codec error ${e.diagnosticInfo}")
                     }
 
                     fun sync() {
-                        synchronized(lock) {
+                        synchronized(codecWaitingLock) {
                             isEncoded = isOutputEOS
-                            lock.notifyAll()
+                            codecWaitingLock.notifyAll()
                         }
                     }
                 })
             }
             codec.configure(outputFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            outputFormat = codec.outputFormat
+            // TODO: Codec output timestep is 21333us
+            val muxerWaitingLock = Object()
+
+            val outputJob = GlobalScope.launch {
+                val outputDataList: MutableList<Pair<ByteBuffer, MediaCodec.BufferInfo>> =
+                    ArrayList()
+                val addNewOutputData: (Pair<ByteBuffer, MediaCodec.BufferInfo>) -> (Unit) = {
+                    outputDataList.add(it)
+                    outputDataList.sortBy { (_, info) -> info.presentationTimeUs }
+                }
+
+                while (isActive) {
+                    val newOutputData = outputBufferChannel.receive()
+                    addNewOutputData(newOutputData)
+                    val (_, info) = newOutputData
+                    if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                        break
+                    }
+                }
+
+                for ((encodedData, info) in outputDataList) {
+                    muxer.writeSampleData(audioTrackIdx, encodedData, info)
+                }
+
+                Log.d("AudioMuxerWriteJob", "Victory")
+
+                synchronized(muxerWaitingLock) {
+                    isWritten = true
+                    muxerWaitingLock.notifyAll()
+                }
+            }
+
             codec.start()
 
-            synchronized(lock) {
+            synchronized(codecWaitingLock) {
                 while (!isEncoded) {
                     try {
-                        lock.wait()
+                        codecWaitingLock.wait()
                     } catch (ie: InterruptedException) {
                     }
                 }
@@ -396,6 +508,20 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
 
             codec.stop()
             codec.release()
+
+            synchronized(muxerWaitingLock) {
+                while (!isWritten) {
+                    try {
+                        muxerWaitingLock.wait()
+                    } catch (ie: InterruptedException) {
+                    }
+                }
+                runBlocking {
+                    outputJob.cancel()
+                    outputJob.join()
+                }
+            }
+
             muxer.stop()
             muxer.release()
         }
