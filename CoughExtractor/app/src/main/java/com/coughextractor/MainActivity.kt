@@ -65,11 +65,11 @@ class MainActivity() : ComponentActivity() {
 
         viewModel.amplitudeObservable.observe(this) {
             val amplitudeThreshold = viewModel.coughRecorder.amplitudeThreshold
+
+            amplitudeThresholdDataSet.clear()
             if (amplitudeThreshold != null) {
                 amplitudeThresholdDataSet.addEntry(Entry(0.0f, amplitudeThreshold.toFloat()))
                 amplitudeThresholdDataSet.addEntry(Entry(viewModel.amplitudesLength.toFloat(), amplitudeThreshold.toFloat()))
-            } else {
-                amplitudeThresholdDataSet.clear()
             }
 
             amplitudeThresholdDataSet.notifyDataSetChanged()
