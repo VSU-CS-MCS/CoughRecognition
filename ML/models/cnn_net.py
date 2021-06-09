@@ -18,23 +18,23 @@ class CoughNetCnn(nn.Module):
         self.cnn_layers = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
-                out_channels=12,
-                kernel_size=(2, 3)),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=(2, 3)),
-            nn.Dropout2d(cnn_dropout, inplace=True),
-
-            nn.Conv2d(
-                in_channels=12,
-                out_channels=24,
-                kernel_size=(2, 3)),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=(2, 3)),
-            nn.Dropout2d(cnn_dropout, inplace=True),
-
-            nn.Conv2d(
-                in_channels=24,
                 out_channels=32,
+                kernel_size=(2, 3)),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=(2, 3)),
+            nn.Dropout2d(cnn_dropout, inplace=True),
+
+            nn.Conv2d(
+                in_channels=32,
+                out_channels=64,
+                kernel_size=(2, 3)),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=(2, 3)),
+            nn.Dropout2d(cnn_dropout, inplace=True),
+
+            nn.Conv2d(
+                in_channels=64,
+                out_channels=96,
                 kernel_size=(2, 3)),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=(2, 3)),
