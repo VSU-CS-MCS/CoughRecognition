@@ -6,3 +6,8 @@
 
 # Visual Studio Code
 .vscode
+
+[Oo]ut
+[Bb]in
+
+__pycache__
