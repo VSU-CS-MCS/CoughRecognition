@@ -8,7 +8,8 @@ module.exports = {
       2,
       'always',
       [
-        'CoughExtractor'
+        'CoughExtractor',
+        'ML'
       ],
     ],
     'header-max-length': [1, "always", 140]
