@@ -49,9 +49,10 @@ def pad_mfccs(mfccs, time_rows_count):
         mfccs = np.pad(mfccs, pad_width=((0, 0), (0, pad_width)), mode='constant')
     else:
         mfccs = mfccs[:, 0:time_rows_count]
-    return mfccs
+    return mfccsэ
+mfccs_time_size = 150
 X_2d_mfccs = get_mfccs(dataframe)
-X_2d_mfccs_padded = [pad_mfccs(mfccs, 100) for mfccs in X_2d_mfccs]
+X_2d_mfccs_padded = [pad_mfccs(mfccs, mfccs_time_size) for mfccs in X_2d_mfccs]
 X_1d_mfccs = pd.DataFrame([np.concatenate(get_features1d(feature2d), axis=None) for feature2d in X_2d_mfccs])
 y = dataframe['cough_type']
 #%%
@@ -244,7 +245,6 @@ def train_test_2d(
         torch.seed()
 
     X_train_torch = torch.tensor(X_train).float().to(device)
-    print(X_train_torch.size())
     X_validate_torch = torch.tensor(X_validate).float().to(device)
     X_test_torch = torch.tensor(X_test).float().to(device)
     y_train_torch = torch.tensor(y_train.values).to(device)
@@ -327,14 +327,11 @@ def train_test_2d(
         val_losses, val_accs
 #%%
 from models.cnn_net import CoughNetCnn
-cnn_net = CoughNetCnn(
-    40,
-    4)
+cnn_net = CoughNetCnn(40, 150, 4).to(device)
 cnn_net_train_result = train_test_2d(
     cnn_net,
     'cnn_net_checkpoint',
     X_train_2d_mfccs_padded, X_validate_2d_mfccs_padded, X_test_2d_mfccs_padded,
     y_train, y_validate, y_test,
     silent=False)
-# linear and random forest on X_1d_mfccs
-# cnn and cnn-lst on padded X_2d_mfccs
+#%%
