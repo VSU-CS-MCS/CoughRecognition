@@ -49,7 +49,7 @@ def pad_mfccs(mfccs, time_rows_count):
         mfccs = np.pad(mfccs, pad_width=((0, 0), (0, pad_width)), mode='constant')
     else:
         mfccs = mfccs[:, 0:time_rows_count]
-    return mfccsэ
+    return mfccs
 mfccs_time_size = 150
 X_2d_mfccs = get_mfccs(dataframe)
 X_2d_mfccs_padded = [pad_mfccs(mfccs, mfccs_time_size) for mfccs in X_2d_mfccs]
