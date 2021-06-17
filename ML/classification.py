@@ -8,8 +8,8 @@ import seaborn as sns
 #%%
 import pandas as pd
 
-from dataset import *
-dataset = get_dataset()
+from dataset.our_dataset import *
+dataset = get_our_dataset()
 dataframe = pd.DataFrame.from_records([w.to_dict() for w in dataset])
 #%%
 min_framerate = 11025
@@ -62,7 +62,7 @@ from sklearn.model_selection import *
 
 test_size = 0.1
 validate_size = 0.15
-def dataframe_split(df, seed = None) -> (pd.DataFrame, pd.DataFrame, pd.DataFrame):
+def dataframe_split(df, seed = None) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     df_train, df_test = train_test_split(
         df,
         test_size=test_size+validate_size,
@@ -331,6 +331,16 @@ cnn_net = CoughNetCnn(40, 150, 4).to(device)
 cnn_net_train_result = train_test_2d(
     cnn_net,
     'cnn_net_checkpoint',
+    X_train_2d_mfccs_padded, X_validate_2d_mfccs_padded, X_test_2d_mfccs_padded,
+    y_train, y_validate, y_test,
+    silent=False)
+#%%
+from models.cnn_lstm_net import CoughNetCnnLstm
+cnn_lstm_net = CoughNetCnnLstm(40, 150, 4,
+    lstm_hidden_size=150).to(device)
+cnn_lstm_net_train_result = train_test_2d(
+    cnn_lstm_net,
+    'cnn_lstm_net_checkpoint',
     X_train_2d_mfccs_padded, X_validate_2d_mfccs_padded, X_test_2d_mfccs_padded,
     y_train, y_validate, y_test,
     silent=False)

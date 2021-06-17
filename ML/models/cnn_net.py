@@ -43,10 +43,10 @@ class CoughNetCnn(nn.Module):
         sample_cnn_input = torch.zeros(1, 1, n_mfccs, time_size)
         sample_cnn_output = self.cnn_layers(sample_cnn_input)
         sample_linear_in = torch.flatten(sample_cnn_output, 1)
-        self.cnn_layers_shape = sample_linear_in.size()[1]
+        self.linear_input_shape = sample_linear_in.size()[1]
 
         self.linear_layers = nn.Sequential(
-            nn.Linear(self.cnn_layers_shape, 120),
+            nn.Linear(self.linear_input_shape, 120),
             nn.ReLU(inplace=True),
             nn.Dropout(linear_dropout),
             nn.Linear(120, n_classes))

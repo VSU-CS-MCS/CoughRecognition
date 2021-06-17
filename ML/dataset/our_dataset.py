@@ -23,7 +23,7 @@ cough_type_marks = bidict({
     'covid': CoughType.Covid,
 })
 #%%
-def get_dataset():
+def get_our_dataset():
     subdirs = [subdir for subdir in os.scandir(single_cough_path) if subdir.is_dir()]
     subdir: os.DirEntry
     dataset: List[CoughData] = list()
@@ -53,7 +53,7 @@ def get_dataset():
             dataset.append(cough_data)
     return dataset
 
-def save_dataset(dataset: List[CoughData]):
+def save_our_dataset(dataset: List[CoughData]):
     for cough in dataset:
         save_cough(cough)
     return
