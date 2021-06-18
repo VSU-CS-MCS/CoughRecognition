@@ -122,7 +122,7 @@ def train_test(
     y_train, y_validate, y_test,
     seed = None,
     silent = True,
-    epochs=1000,
+    epochs=200,
     **kwargs):
     checkpoint_path = f'{checkpoint_path}.pt'
     np.random.seed(seed)
@@ -134,9 +134,11 @@ def train_test(
     else:
         torch.seed()
 
-    X_train_torch = torch.tensor(X_train.values).float().to(device)
-    X_validate_torch = torch.tensor(X_validate.values).float().to(device)
-    X_test_torch = torch.tensor(X_test.values).float().to(device)
+    data_to_tensor = lambda X_data: X_data.values if type(X_data) == pd.DataFrame else X_data
+
+    X_train_torch = torch.tensor(data_to_tensor(X_train)).float().to(device)
+    X_validate_torch = torch.tensor(data_to_tensor(X_validate)).float().to(device)
+    X_test_torch = torch.tensor(data_to_tensor(X_test)).float().to(device)
     y_train_torch = torch.tensor(y_train.values).to(device)
     y_test_torch = torch.tensor(y_test.values).to(device)
     y_validate_torch = torch.tensor(y_validate.values).to(device)
@@ -225,110 +227,9 @@ linear_net_train_result = train_test(
     y_train, y_validate, y_test,
     silent=False)
 #%%
-def train_test_2d(
-    model,
-    checkpoint_path,
-    X_train, X_validate, X_test,
-    y_train, y_validate, y_test,
-    seed = None,
-    silent = True,
-    epochs=1000,
-    **kwargs):
-    checkpoint_path = f'{checkpoint_path}.pt'
-    np.random.seed(seed)
-    manual_seed = seed != None
-    torch.backends.cudnn.deterministic = manual_seed
-    torch.backends.cudnn.benchmark = not manual_seed
-    if (manual_seed):
-        torch.manual_seed(seed)
-    else:
-        torch.seed()
-
-    X_train_torch = torch.tensor(X_train).float().to(device)
-    X_validate_torch = torch.tensor(X_validate).float().to(device)
-    X_test_torch = torch.tensor(X_test).float().to(device)
-    y_train_torch = torch.tensor(y_train.values).to(device)
-    y_test_torch = torch.tensor(y_test.values).to(device)
-    y_validate_torch = torch.tensor(y_validate.values).to(device)
-
-    weights = torch.FloatTensor(class_weights_arr).to(device)
-    loss_fn = torch.nn.CrossEntropyLoss(weights)
-
-    optimizer = torch.optim.AdamW(model.parameters())
-
-    train_losses = []
-    train_accs = []
-    val_losses = []
-    val_accs = []
-    for epoch in range(epochs):
-        optimizer.zero_grad()
-        y_train_pred_torch = model(X_train_torch)
-        train_loss = loss_fn(y_train_pred_torch, y_train_torch)
-        train_losses.append(train_loss.item())
-
-        _, y_train_pred = torch.max(y_train_pred_torch.cpu(), 1)
-        train_acc = accuracy_score(y_train, y_train_pred)
-        train_accs.append(train_acc)
-
-        train_loss.backward()
-        optimizer.step()
-
-        with torch.no_grad():
-            y_validate_pred_torch = model(X_validate_torch)
-            val_loss = loss_fn(y_validate_pred_torch, y_validate_torch)
-            val_losses.append(val_loss.item())
-
-            _, y_validate_pred = torch.max(y_validate_pred_torch.cpu(), 1)
-            val_acc = accuracy_score(y_validate, y_validate_pred)
-            val_accs.append(val_acc)
-
-        if (val_loss.item() <= np.min(val_losses)):
-            torch.save(model.state_dict(), checkpoint_path)
-            if (silent):
-                continue
-            print(f'{epoch} saved')
-            print(f'{epoch} Loss {train_loss} {val_loss}')
-            print(f'{epoch} Accuracy {train_acc} {val_acc}')
-        elif (epoch % 100 == 99):
-            if (silent):
-                continue
-            print(f'{epoch} Loss {train_loss} {val_loss}')
-            print(f'{epoch} Accuracy {train_acc} {val_acc}')
-
-    model.load_state_dict(torch.load(checkpoint_path))
-    model.eval()
-
-    y_test_pred_torch = model(X_test_torch)
-    test_loss = loss_fn(y_test_pred_torch, y_test_torch)
-    _, y_test_pred = torch.max(y_test_pred_torch, 1)
-    y_test_pred_cpu = y_test_pred.cpu()
-
-    confusion = confusion_matrix(y_test, y_test_pred_cpu, normalize='true')
-    accuracy = accuracy_score(y_test, y_test_pred_cpu)
-
-    if not silent:
-        plt.plot(train_losses, 'r', val_losses, 'b')
-        plt.legend(['Train', 'Validate'])
-        plt.show()
-
-        plt.plot(train_accs, 'r', val_accs, 'b')
-        plt.legend(['Train', 'Validate'])
-        plt.show()
-
-        plot_confusion(confusion)
-
-        print(classification_report(y_test, y_test_pred_cpu))
-
-    return \
-        confusion, \
-        accuracy, \
-        test_loss.item(), \
-        train_losses, train_accs, \
-        val_losses, val_accs
-#%%
 from models.cnn_net import CoughNetCnn
 cnn_net = CoughNetCnn(40, 150, 4).to(device)
-cnn_net_train_result = train_test_2d(
+cnn_net_train_result = train_test(
     cnn_net,
     'cnn_net_checkpoint',
     X_train_2d_mfccs_padded, X_validate_2d_mfccs_padded, X_test_2d_mfccs_padded,
@@ -338,7 +239,7 @@ cnn_net_train_result = train_test_2d(
 from models.cnn_lstm_net import CoughNetCnnLstm
 cnn_lstm_net = CoughNetCnnLstm(40, 150, 4,
     lstm_hidden_size=150).to(device)
-cnn_lstm_net_train_result = train_test_2d(
+cnn_lstm_net_train_result = train_test(
     cnn_lstm_net,
     'cnn_lstm_net_checkpoint',
     X_train_2d_mfccs_padded, X_validate_2d_mfccs_padded, X_test_2d_mfccs_padded,
