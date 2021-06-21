@@ -24,9 +24,9 @@ class CoughNetCnnLstm(nn.Module):
             nn.Conv2d(
                 in_channels=1,
                 out_channels=32,
-                kernel_size=(2, 2)),
+                kernel_size=(2, 3)),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=(2, 2)),
+            nn.MaxPool2d(kernel_size=(2, 3)),
             nn.Dropout2d(cnn_dropout, inplace=True),
 
             nn.Conv2d(
@@ -34,7 +34,7 @@ class CoughNetCnnLstm(nn.Module):
                 out_channels=64,
                 kernel_size=(2, 3)),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=(2, 2)),
+            nn.MaxPool2d(kernel_size=(2, 3)),
             nn.Dropout2d(cnn_dropout, inplace=True),
 
             nn.Conv2d(
@@ -42,7 +42,7 @@ class CoughNetCnnLstm(nn.Module):
                 out_channels=96,
                 kernel_size=(2, 3)),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=(2, 2)),
+            nn.MaxPool2d(kernel_size=(2, 3)),
             nn.Dropout2d(cnn_dropout, inplace=True))
 
         sample_cnn_input = torch.rand(2, 1, n_mfccs, time_size)
