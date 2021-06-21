@@ -12,6 +12,7 @@ class CoughNetCnn(nn.Module):
         time_size,
         n_classes,
         cnn_dropout=0.25,
+        linear_units=120,
         linear_dropout=0.1):
         super(CoughNetCnn, self).__init__()
 
@@ -46,10 +47,10 @@ class CoughNetCnn(nn.Module):
         self.linear_input_shape = sample_linear_in.size()[1]
 
         self.linear_layers = nn.Sequential(
-            nn.Linear(self.linear_input_shape, 120),
+            nn.Linear(self.linear_input_shape, linear_units),
             nn.ReLU(inplace=True),
             nn.Dropout(linear_dropout),
-            nn.Linear(120, n_classes))
+            nn.Linear(linear_units, n_classes))
 
     def forward(self, mfccs):
         batch_size, n_mfccs, time_size = mfccs.size()
