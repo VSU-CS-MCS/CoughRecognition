@@ -68,7 +68,7 @@ else:
     device = torch.device('cpu')
 #%%
 import torch.nn as nn
-scalogram_convolutor = nn.AvgPool2d((1, 300))
+scalogram_convolutor = nn.AvgPool2d((1, 200))
 
 def get_scalogram(
     dataframe,
@@ -88,11 +88,10 @@ def get_scalogram(
 
     return x
 
-scalogram_widths = np.arange(1, 21)
+scalogram_widths = np.arange(1, 41)
 scalogram_scale_size = len(scalogram_widths)
 X_2d_scalogram = get_scalogram(dataframe, scalogram_widths)
-#%%
-scalogram_time_size = 150
+scalogram_time_size = 300
 X_2d_scalogram_padded = [pad_features(scalogram, scalogram_time_size) for scalogram in X_2d_scalogram]
 #%%
 from sklearn import preprocessing
@@ -405,71 +404,21 @@ cnn_lstm_net_train_result = train_test(
     y_train, y_validate, y_test,
     silent=False)
 #%%
-from torch.utils.data import DataLoader, Dataset
-
-class DataframeCoughDataset(Dataset):
-    def __init__(self, X, y=None):
-        self.X = X
-        self.y = y
-
-    def __len__(self):
-        return len(self.X)
-
-    def __getitem__(self, idx):
-        x = self.X.iloc[idx]
-        if self.y is None:
-            y = -1
-        else:
-            y = self.y.iloc[idx]
-        return x, y
-
-class ListCoughDataset(Dataset):
-    def __init__(self, X, y=None):
-        self.X = X
-        self.y = y
-
-    def __len__(self):
-        return len(self.X)
-
-    def __getitem__(self, idx):
-        x = self.X[idx]
-        if self.y is None:
-            y = -1
-        else:
-            y = self.y.iloc[idx]
-        return x, y
-
-train_2d_scalogram_padded_ds = ListCoughDataset(X_train_2d_scalogram_padded, y_train)
-validate_2d_scalogram_padded_ds = ListCoughDataset(X_validate_2d_scalogram_padded, y_validate)
-test_2d_scalogram_padded_ds = ListCoughDataset(X_test_2d_scalogram_padded, y_test)
-
-batch_size_2d_scalogram_padded = 1
-train_2d_scalogram_padded_dl = DataLoader(train_2d_scalogram_padded_ds, batch_size=batch_size_2d_scalogram_padded, shuffle=True)
-validate_2d_scalogram_padded_dl = DataLoader(validate_2d_scalogram_padded_ds, batch_size=batch_size_2d_scalogram_padded, shuffle=True)
-test_2d_scalogram_padded_dl = DataLoader(test_2d_scalogram_padded_ds, batch_size=batch_size_2d_scalogram_padded, shuffle=True)
-
-scalogram_epochs = 100
-#%%
 from models.cnn_net import CoughNetCnn
 cnn_net = CoughNetCnn(scalogram_scale_size, scalogram_time_size, 4).to(device)
-cnn_net_train_result = train_test_dl(
+cnn_net_train_result = train_test(
     cnn_net,
     'cnn_scalogram_net_checkpoint',
-    train_2d_scalogram_padded_dl,
-    validate_2d_scalogram_padded_dl,
-    test_2d_scalogram_padded_dl,
-    silent=False,
-    epochs=scalogram_epochs)
+    X_train_2d_scalogram_padded, X_validate_2d_scalogram_padded, X_test_2d_scalogram_padded,
+    y_train, y_validate, y_test,
+    silent=False)
 #%%
 from models.cnn_lstm_net import CoughNetCnnLstm
-cnn_lstm_net = CoughNetCnnLstm(scalogram_scale_size, scalogram_time_size, 4,
-    lstm_hidden_size=150).to(device)
-cnn_lstm_net_train_result = train_test_dl(
+cnn_lstm_net = CoughNetCnnLstm(scalogram_scale_size, scalogram_time_size, 4, lstm_hidden_size=150).to(device)
+cnn_lstm_net_train_result = train_test(
     cnn_lstm_net,
     'cnn_lstm_scalogram_net_checkpoint',
-    train_2d_scalogram_padded_dl,
-    validate_2d_scalogram_padded_dl,
-    test_2d_scalogram_padded_dl,
-    silent=False,
-    epochs=scalogram_epochs)
+    X_train_2d_scalogram_padded, X_validate_2d_scalogram_padded, X_test_2d_scalogram_padded,
+    y_train, y_validate, y_test,
+    silent=False)
 #%%
