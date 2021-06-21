@@ -60,6 +60,16 @@ X_2d_mfccs_padded = [pad_features(mfccs, mfccs_time_size) for mfccs in X_2d_mfcc
 X_1d_mfccs = pd.DataFrame([np.concatenate(get_features1d(feature2d), axis=None) for feature2d in X_2d_mfccs])
 y = dataframe['cough_type']
 #%%
+import torch
+
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+else:
+    device = torch.device('cpu')
+#%%
+import torch.nn as nn
+scalogram_convolutor = nn.AvgPool2d((1, 300))
+
 def get_scalogram(
     dataframe,
     widths,
@@ -69,15 +79,20 @@ def get_scalogram(
         data = stereo_to_mono(row.data)
         sig = np.array([float(i) for i in data])
         scalogram = signal.cwt(sig, signal.ricker, widths)
-        x.append(scalogram)
+        scalogram_torch = torch.tensor(scalogram).float().to(device)
+        scalogram_conv = scalogram_convolutor(scalogram_torch.view(1, 1, scalogram.shape[0], scalogram.shape[1]))
+        del scalogram_torch
+        _, _, scale_size, time_size = scalogram_conv.size()
+        x.append(scalogram_conv.view(scale_size, time_size).cpu().detach().numpy())
+        del scalogram_conv
 
     return x
 
 scalogram_widths = np.arange(1, 21)
 scalogram_scale_size = len(scalogram_widths)
-scalogram_time_size = 150000
-
 X_2d_scalogram = get_scalogram(dataframe, scalogram_widths)
+#%%
+scalogram_time_size = 150
 X_2d_scalogram_padded = [pad_features(scalogram, scalogram_time_size) for scalogram in X_2d_scalogram]
 #%%
 from sklearn import preprocessing
@@ -133,13 +148,6 @@ clf.fit(X_train_1d_mfccs, y_train)
 y_random_forest_pred = clf.predict(X_test_1d_mfccs)
 print(f'Random Forest {classification_report(y_test, y_random_forest_pred)}')
 plot_confusion(confusion_matrix(y_test, y_random_forest_pred, normalize='true'))
-#%%
-import torch
-
-if torch.cuda.is_available():
-    device = torch.device('cuda')
-else:
-    device = torch.device('cpu')
 #%%
 def train_test(
     model,
