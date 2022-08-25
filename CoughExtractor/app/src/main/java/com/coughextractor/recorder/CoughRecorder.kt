@@ -1,12 +1,12 @@
 package com.coughextractor.recorder
 
 interface CoughRecorder<TRead> {
+    var token: String
     var isRecording: Boolean
     var sampleRate: Int
     var fileName: String
-    var fileExtension: String
     val filePath
-        get() = "$fileName.$fileExtension"
+        get() = "$fileName.wav"
     var onAmplitudesUpdate: (amplitudes: Array<TRead>) -> Unit
     fun start()
     fun stop()

@@ -58,19 +58,16 @@ class MainActivity() : ComponentActivity() {
         val amplitudeThresholdEntries: MutableList<Entry> = ArrayList(viewModel.amplitudesLength)
         val amplitudeThresholdDataSet = LineDataSet(amplitudeThresholdEntries, getString(R.string.amplitude_label))
         amplitudeThresholdDataSet.setDrawCircles(false)
-        amplitudeThresholdDataSet.color = ColorTemplate.VORDIPLOM_COLORS[1]
+        amplitudeThresholdDataSet.color = ColorTemplate.VORDIPLOM_COLORS[0]
 
         val amplitudesDataSetLineData = LineData(amplitudesDataSet, amplitudeThresholdDataSet)
         chart.data = amplitudesDataSetLineData
 
         viewModel.amplitudeObservable.observe(this) {
-            val amplitudeThreshold = viewModel.coughRecorder.amplitudeThreshold
+
 
             amplitudeThresholdDataSet.clear()
-            if (amplitudeThreshold != null) {
-                amplitudeThresholdDataSet.addEntry(Entry(0.0f, amplitudeThreshold.toFloat()))
-                amplitudeThresholdDataSet.addEntry(Entry(viewModel.amplitudesLength.toFloat(), amplitudeThreshold.toFloat()))
-            }
+                amplitudeThresholdDataSet.addEntry(Entry(viewModel.amplitudesLength.toFloat(), 0.0f))
 
             amplitudeThresholdDataSet.notifyDataSetChanged()
             amplitudesDataSetLineData.notifyDataChanged()

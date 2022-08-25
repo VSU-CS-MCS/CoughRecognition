@@ -12,13 +12,12 @@ import kotlin.concurrent.timer
 private const val TAG = "FileCoughRecorder"
 
 class FileCoughRecorder @Inject constructor() : CoughRecorder<Int> {
-
+    override var token: String = ""
     private var recorder: MediaRecorder? = null
 
     override var isRecording = false
     override var sampleRate: Int = 48000
     override var fileName: String = ""
-    override var fileExtension: String = ""
     override lateinit var onAmplitudesUpdate: (amplitudes: Array<Int>) -> Unit
 
     override fun start() {
