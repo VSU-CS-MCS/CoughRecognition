@@ -1,10 +1,14 @@
 package com.coughextractor.recorder
 
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothSocket
 import android.media.*
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
 import android.util.Log
+import com.coughextractor.MainViewModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import java.io.*
@@ -12,10 +16,15 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLConnection
 import java.nio.ByteBuffer
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
-import javax.net.ssl.HttpsURLConnection
 import kotlin.experimental.and
 
 data class AuthResponse(
@@ -28,7 +37,6 @@ private const val TAG = "AmplitudeCoughRecorder"
 
 class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
 
-    var filesCount: Int = 0
     override var isRecording: Boolean = false
 
     override var fileName: String = ""
@@ -38,7 +46,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
 
     private var audioRecorder: AudioRecord? = null
     private var recordingThread: AudioRecordThread? = null
-
+    var baseDir = ""
     private val channelCount = 1
     private val bytesPerSample = 2 // depends on audioFormat
 
@@ -270,16 +278,24 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
         this.recordingThread = recordingThread
         recordingThread.start()
 
-        val audioRecordDataHandlerJob = GlobalScope.launch {
-            val handler = AudioRecordDataHandler()
-            while (isActive) {
-                val (a, b) = audioRecordDataChannel.receive()
-                handler.handleData(a, b)
-            }
-        }
-        this.audioRecordDataHandlerJob = audioRecordDataHandlerJob
+        try {
+            val audioRecordDataHandlerJob = GlobalScope.launch {
+                val handler = AudioRecordDataHandler()
 
-        isRecording = true
+
+                //handler.readBlueToothDataFromMothership()
+                while (isActive) {
+                    val (a, b) = audioRecordDataChannel.receive()
+                    handler.handleData(a, b)
+                }
+            }
+            this.audioRecordDataHandlerJob = audioRecordDataHandlerJob
+            isRecording = true
+        } catch (e: Exception) {
+            //
+        }
+
+
     }
 
     override fun stop() {
@@ -325,6 +341,25 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
             val v1 = ((this.toInt() ushr 8) and 0xFF)
             return ((v1 and 0xFF) or (v0 shl 8)).toShort()
         }
+
+        fun readBlueToothDataFromMothership(bluetoothSocket: BluetoothSocket) {
+            //Log.i(LOGTAG, Thread.currentThread().name)
+            val bluetoothSocketInputStream = bluetoothSocket.inputStream
+            val buffer = ByteArray(1024)
+            var bytes: Int
+            //Loop to listen for received bluetooth messages
+            while (true) {
+                try {
+                    bytes = bluetoothSocketInputStream.read(buffer)
+                    val readMessage = String(buffer, 0, bytes)
+                    //liveData.postValue(readMessage)
+                } catch (e: IOException) {
+                    e.printStackTrace()
+                    break
+                }
+            }
+        }
+
 
         fun handleData(data: ShortArray, timeNs: Long) {
             data.copyInto(shortBuffer, shortBufferOffset)
@@ -377,13 +412,6 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
                     timeNsOffsetPart
                 )
 
-                val shortToByteArray = { it: Short ->
-                    val b = ByteArray(2)
-                    b[0] = (it and 0x00FF).toByte()
-                    b[1] = (it.toInt().shr(8) and 0x000000FF) as Byte
-                    b
-                }
-
                 for (short in shortBuffer.slice(dataOffsetPart until recordAudioBufferSize)) {
                     byteBuffer.putShort(short.reverseBytes())
                 }
@@ -392,7 +420,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
                 }
 
                 GlobalScope.launch {
-                    AudioSaver().saveToFile(byteBuffer, timeNsInChronologicalOrder)
+                    AudioSaver().saveToFile(byteBuffer)
                 }
             }
 
@@ -411,10 +439,10 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
 
         override fun run() {
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
-            val shortBuffer = ShortArray(audioBufferSize)
 
             try {
                 loop@ while (isRecording.get()) {
+                    val shortBuffer = ShortArray(audioBufferSize)
                     val audioPresentationTimeNs = System.nanoTime()
                     val result: Int = audioRecorder!!.read(
                         shortBuffer,
@@ -461,7 +489,11 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
     }
 
     private inner class AudioSaver {
-        fun saveToFile(byteBuffer: ByteBuffer, timeNsBuffer: LongArray) {
+        fun saveToFile(byteBuffer: ByteBuffer) {
+            val localDate = LocalDateTime.now().atZone(ZoneId.of("UTC"))
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm-ss")
+            val fname = "sample_${localDate.format(formatter)}"
+            fileName = "${baseDir}/${fname}"
             val file = File(filePath)
             val outputStream = file.outputStream()
             outputStream.write(byteBuffer.array())
@@ -554,10 +586,11 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
             val apiPost = "http://cough.bfsoft.su/api/files/"
 
             val multipart = MultipartUtility(apiPost)
-            multipart.addFormField("id_examination", "114")
-            multipart.addFormField("exam_name", "TEST")
+            multipart.addFormField("id_examination", "118")
+            multipart.addFormField("exam_name", "Для демонстрации")
             multipart.addFilePart("file_to", File(filePath))
             multipart.finish()
+            Files.deleteIfExists(Paths.get(filePath))
         }
 
 

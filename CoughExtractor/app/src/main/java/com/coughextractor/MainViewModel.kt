@@ -1,5 +1,6 @@
 package com.coughextractor
 
+import android.bluetooth.BluetoothAdapter
 import android.util.Log
 import androidx.hilt.lifecycle.ViewModelInject
 import androidx.lifecycle.MutableLiveData
@@ -24,7 +25,6 @@ import java.net.URL
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import javax.net.ssl.HttpsURLConnection
 
 private const val TAG = "MainViewModel"
 
@@ -51,7 +51,7 @@ class MainViewModel @ViewModelInject constructor(
                 this@MainViewModel.amplitudes.postValue(prevValue)
             }
         }
-        coughRecorder.amplitudeThreshold = 100
+        coughRecorder.amplitudeThreshold = 2000
         authorization()
     }
 
@@ -71,7 +71,7 @@ class MainViewModel @ViewModelInject constructor(
 
     val amplitudesLock = Object()
     private val amplitudesTimeLengthSec = 6
-    private val amplitudesStep = 1500
+    private val amplitudesStep = 150
     private val amplitudesPerRead = (0 until coughRecorder.audioBufferSize step amplitudesStep).count()
     private val amplitudesPerReadTimeSec = coughRecorder.audioBufferSize.toDouble() / coughRecorder.sampleRate.toDouble()
     val amplitudesLength = (amplitudesTimeLengthSec * amplitudesPerRead / amplitudesPerReadTimeSec).roundToInt()
@@ -91,10 +91,7 @@ class MainViewModel @ViewModelInject constructor(
     fun powerClick() {
         if (!coughRecorder.isRecording) {
             amplitudes.postValue(ArrayList())
-            val localDate = LocalDateTime.now().atZone(ZoneId.of("UTC"))
-            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm-ss")
-            val fileName = "sample_${coughDevice.deviceId}_${localDate.format(formatter)}"
-            coughRecorder.fileName = "${baseDir}/${fileName}"
+            coughRecorder.baseDir = baseDir
             coughRecorder.start()
         } else {
             coughRecorder.stop()
@@ -111,8 +108,8 @@ class MainViewModel @ViewModelInject constructor(
         val jsonObjectString = jsonObject.toString()
 
         GlobalScope.launch(Dispatchers.IO) {
-            val url = URL("https://cough.bfsoft.su/api-token-auth/")
-            val httpURLConnection = url.openConnection() as HttpsURLConnection
+            val url = URL("http://cough.bfsoft.su/api-token-auth/")
+            val httpURLConnection = url.openConnection() as HttpURLConnection
             httpURLConnection.requestMethod = "POST"
             httpURLConnection.setRequestProperty(
                 "Content-Type",
