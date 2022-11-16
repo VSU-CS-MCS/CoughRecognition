@@ -1,0 +1,113 @@
+package com.coughextractor
+
+import android.content.Intent
+import android.os.Bundle
+import android.os.Handler
+import android.util.Log
+import android.widget.ImageView
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import com.coughextractor.recorder.AuthResponse
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonParser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.BufferedWriter
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
+
+
+class IntroActivity : AppCompatActivity() {
+    var textView5: TextView? = null
+    var imageView: ImageView? = null
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_intro)
+        textView5 = findViewById(R.id.textView5)
+        textView5?.animate()?.translationY(-1400f)?.setDuration(1000)?.startDelay = 10
+        imageView = findViewById(R.id.imageView)
+        imageView?.animate()?.translationY(-2000f)?.setDuration(1000)?.startDelay = 10
+
+        val login = getSharedPreferences("Login", MODE_PRIVATE)
+
+        val username = login.getString("Username", null)
+        val password = login.getString("Password", null)
+
+        if (username.isNullOrEmpty() || password.isNullOrEmpty()) {
+            //new Handler
+            Handler().postDelayed({
+                val intent = Intent(this@IntroActivity, LoginActivity::class.java)
+                startActivity(intent)
+                finish()
+            }, SPLASH_TIME_OUT.toLong())
+        } else {
+            authorization(username, password)
+        }
+    }
+
+    companion object {
+        private const val SPLASH_TIME_OUT = 10
+    }
+
+    private fun authorization(username: String, password: String) {
+        val jsonObject = JSONObject()
+        jsonObject.put("username", username)
+        jsonObject.put("password", password)
+
+        // Convert JSONObject to String
+        val jsonObjectString = jsonObject.toString()
+
+        GlobalScope.launch(Dispatchers.IO) {
+            val url = URL("http://cough.bfsoft.su/api-token-auth/")
+            val httpURLConnection = url.openConnection() as HttpURLConnection
+            httpURLConnection.requestMethod = "POST"
+            httpURLConnection.setRequestProperty(
+                "Content-Type",
+                "application/json"
+            ) // The format of the content we're sending to the server
+            httpURLConnection.setRequestProperty(
+                "Accept",
+                "application/json"
+            ) // The format of response we want to get from the server
+            httpURLConnection.doInput = true
+            httpURLConnection.doOutput = true
+
+            val out = BufferedWriter(OutputStreamWriter(httpURLConnection.outputStream))
+            out.write(jsonObjectString)
+            out.close()
+
+            // Check if the connection is successful
+            val responseCode = httpURLConnection.responseCode
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                val response = httpURLConnection.inputStream.bufferedReader()
+                    .use { it.readText() }  // defaults to UTF-8
+                withContext(Dispatchers.Main) {
+
+                    // Convert raw JSON to pretty JSON using GSON library
+                    val gson = GsonBuilder().setPrettyPrinting().create()
+                    val prettyJson = gson.toJson(JsonParser.parseString(response))
+                    val authResponse = gson.fromJson(prettyJson, AuthResponse::class.java)
+                    if (authResponse.token.isNotEmpty()) {
+                        val sp = getSharedPreferences("Login", MODE_PRIVATE)
+                        val Ed = sp.edit()
+                        Ed.putString("Username", username)
+                        Ed.putString("Password", password)
+                        Ed.apply()
+
+                        val intent = Intent(this@IntroActivity, MainActivity::class.java)
+                        intent.putExtra("token", authResponse.token)
+                        startActivity(intent)
+                        finish()
+                    }
+                }
+            } else {
+                Log.e("HTTPURLCONNECTION_ERROR", responseCode.toString())
+            }
+        }
+    }
+}
+
