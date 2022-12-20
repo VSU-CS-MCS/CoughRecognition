@@ -1,10 +1,11 @@
 <resources>
-    <string name="app_name">CoughDetector</string>
+    <string name="app_name">Cough Detector</string>
 
     <string name="amplitude_label">Предел амплитуды звука:</string>
+    <string name="accelerometer_label">Предел амплитуды акселерометра:</string>
     <string name="chart_amplitude_label">Амплитуда звука:</string>
+    <string name="chart_accelerometer_label">Амплитуда звука:</string>
 
-    <string name="title">Cough Detector</string>
     <string name="bgImage">bgImage</string>
     <string name="password">Password</string>
 </resources>

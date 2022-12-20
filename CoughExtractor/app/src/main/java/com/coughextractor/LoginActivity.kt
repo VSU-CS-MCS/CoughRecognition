@@ -127,6 +127,7 @@ class LoginActivity : AppCompatActivity(), View.OnClickListener {
 
                         val intent = Intent(this@LoginActivity, MainActivity::class.java)
                         intent.putExtra("token", authResponse.token)
+                        intent.putExtra("userId", authResponse.userId)
                         startActivity(intent)
                         finish()
                     }

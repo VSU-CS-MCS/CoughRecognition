@@ -1,57 +1,39 @@
 package com.coughextractor.recorder
 
-import android.app.*
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothSocket
-import android.content.Context
-import android.content.Intent
-import android.graphics.Color
-import android.media.*
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
-import android.os.Build
-import android.os.IBinder
 import android.util.Log
-import androidx.core.app.NotificationCompat
-import com.coughextractor.Accelerometer
-import com.coughextractor.MainActivity
-import com.coughextractor.R
-import com.google.gson.GsonBuilder
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import java.io.*
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLConnection
+import java.io.File
+import java.io.IOException
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
-import kotlin.math.abs
-
-data class AuthResponse(
-    val token: String,
-    val username: String,
-    val password: String
-)
 
 private const val TAG = "AmplitudeCoughRecorder"
 
+
 class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
 
+    lateinit var examination: Examination
     override var isRecording: Boolean = false
-
     override var fileName: String = ""
-    override lateinit var onAmplitudesUpdate: (amplitudes: Array<Short>) -> Unit
 
-    var amplitudeThreshold: Int? = null
+    override lateinit var onAmplitudesUpdate: (amplitudes: Array<Short>) -> Unit
+    var soundAmplitudeThreshold: Int? = null
+
+    var accelerometerAmplitudeThreshold: Int? = null
 
     private var audioRecorder: AudioRecord? = null
     private var recordingThread: AudioRecordThread? = null
@@ -92,208 +74,6 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
 
     private val audioRecordDataChannel = Channel<Pair<ShortArray, Long>>(Channel.BUFFERED)
     private var audioRecordDataHandlerJob: Job? = null
-
-    inner class AccelerometerThread : Thread() {
-        private var prevAccelerometer = Accelerometer(0, 0, 0, 0, 0)
-        var isCough = AtomicBoolean(false)
-        var device: BluetoothDevice? = null
-
-        init {
-            val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
-            for (device in bluetoothAdapter.bondedDevices) {
-                if (device.name == "HC-COUGH") {
-                    this.device = device
-                }
-            }
-        }
-
-        private fun connect(btDevice: BluetoothDevice?): BluetoothSocket? {
-            val id: UUID = btDevice?.uuids?.get(0)!!.uuid
-            val bts = btDevice.createRfcommSocketToServiceRecord(id)
-            bts?.connect()
-            return bts
-        }
-
-        private fun InputStream.readUpToChar(stopChar: Char): String {
-            val stringBuilder = StringBuilder()
-            var currentChar = this.read().toChar()
-            while (currentChar != stopChar) {
-                stringBuilder.append(currentChar)
-                currentChar = this.read().toChar()
-                if (this.available() <= 0) {
-                    stringBuilder.append(currentChar)
-                    break
-                }
-            }
-            return stringBuilder.toString()
-        }
-
-        override fun run() {
-            if (device != null) {
-                val inputStream: InputStream = connect(device)?.inputStream!!
-                var string = ""
-                try {
-                    while (true) {
-                        string = inputStream.readUpToChar('\r')
-                        if (string.endsWith("=") || !string.contains("Xa=") || !string.contains("Ya=")
-                            || !string.contains("X=") || !string.contains("Y=") || !string.contains(
-                                "ADC="
-                            )
-                        ) {
-                            continue
-                        }
-                        val builder = java.lang.StringBuilder()
-                        builder.append('{')
-                        string = string.trim(' ', '\"', '\n', '\r')
-                        string.replace("=".toRegex(), " : ").also { string = it }
-                        string.replace("\t".toRegex(), ",").also { string = it }
-                        builder.append(string)
-                        builder.append('}')
-
-                        val gson = GsonBuilder().setPrettyPrinting().create()
-                        val currentAccelerometer =
-                            gson.fromJson(builder.toString(), Accelerometer::class.java)
-                        if (abs(prevAccelerometer.Xa - currentAccelerometer.Xa) > 1000 || abs(
-                                prevAccelerometer.Ya - currentAccelerometer.Ya
-                            ) > 1000
-                        ) {
-                            this.isCough.set(true)
-                        }
-                        this.prevAccelerometer = currentAccelerometer
-                        sleep(50)
-                    }
-                } catch (e: Exception) {
-                    println(string)
-                }
-            }
-        }
-    }
-
-    private inner class MultipartUtility(requestURL: String?) {
-        val httpConn: HttpURLConnection
-        private val lineFeed = "\r\n"
-        private val boundary: String = "***" + System.currentTimeMillis() + "***"
-        private val outputStream: OutputStream
-        private val writer: PrintWriter
-
-        /**
-         * Adds a form field to the request
-         *
-         * @param name  field name
-         * @param value field value
-         */
-        fun addFormField(name: String, value: String?) {
-            writer.append("--$boundary").append(lineFeed)
-            writer.append("Content-Disposition: form-data; name=\"$name\"")
-                .append(lineFeed)
-            writer.append("Content-Type: text/plain;").append(
-                lineFeed
-            )
-            writer.append(lineFeed)
-            writer.append(value)
-            writer.flush()
-            writer.append(lineFeed)
-        }
-
-        /**
-         * Adds a upload file section to the request
-         *
-         * @param fieldName  name attribute in <input type="file" name="..."></input>
-         * @param uploadFile a File to be uploaded
-         * @throws IOException
-         */
-        @Throws(IOException::class)
-        fun addFilePart(fieldName: String, uploadFile: File) {
-            val fileName = uploadFile.name
-            writer.append("--$boundary").append(lineFeed)
-            writer.append(
-                "Content-Disposition: form-data; name=\"" + fieldName
-                        + "\"; filename=\"" + fileName + "\""
-            )
-                .append(lineFeed)
-            writer.append(
-                (
-                        "Content-Type: "
-                                + URLConnection.guessContentTypeFromName(fileName))
-            )
-                .append(lineFeed)
-            writer.append("Content-Transfer-Encoding: binary").append(lineFeed)
-            writer.append(lineFeed)
-            writer.flush()
-            val inputStream = FileInputStream(uploadFile)
-            val buffer = ByteArray(4096)
-            var bytesRead: Int
-            while ((inputStream.read(buffer).also { bytesRead = it }) != -1) {
-                outputStream.write(buffer, 0, bytesRead)
-            }
-            outputStream.flush()
-            inputStream.close()
-            writer.append(lineFeed)
-            writer.flush()
-        }
-
-        /**
-         * Completes the request and receives response from the server.
-         *
-         * @return a list of Strings as response in case the server returned
-         * status OK, otherwise an exception is thrown.
-         * @throws IOException
-         */
-        @Throws(IOException::class)
-        fun finish(): List<String?> {
-            val response: MutableList<String?> = ArrayList()
-            writer.append(lineFeed).flush()
-            writer.append("--$boundary--").append(lineFeed)
-            writer.close()
-
-            // checks server's status code first
-            val status: Int = httpConn.responseCode
-            if (status == HttpURLConnection.HTTP_OK) {
-                val reader = BufferedReader(
-                    InputStreamReader(
-                        httpConn.inputStream
-                    )
-                )
-                var line: String?
-                while ((reader.readLine().also { line = it }) != null) {
-                    response.add(line)
-                }
-                reader.close()
-                httpConn.disconnect()
-            } else {
-                throw IOException("Server returned non-OK status: $status")
-            }
-            return response
-        }
-
-        /**
-         * This constructor initializes a new HTTP POST request with content type
-         * is set to multipart/form-data
-         *
-         * @param requestURL
-         * @param charset
-         * @throws IOException
-         */
-        init {
-            // creates a unique boundary based on time stamp
-            val url = URL(requestURL)
-            httpConn = url.openConnection() as HttpURLConnection
-            httpConn.useCaches = false
-            httpConn.doOutput = true // indicates POST method
-            httpConn.doInput = true
-            httpConn.requestMethod = "POST"
-            httpConn.setRequestProperty(
-                "Content-Type",
-                "multipart/form-data; boundary=$boundary"
-            )
-            httpConn.setRequestProperty("Authorization", "token $token")
-            outputStream = httpConn.outputStream
-            writer = PrintWriter(
-                OutputStreamWriter(outputStream),
-                true
-            )
-        }
-    }
 
     override fun start() {
         if (isRecording) {
@@ -352,6 +132,14 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
 
         audioRecorder.startRecording()
 
+        val recordingThread = AudioRecordThread()
+        this.recordingThread = recordingThread
+        recordingThread.start()
+
+        val accelerometerThread = AccelerometerThread()
+        accelerometerThread.priority = 10
+        this.accelerometerThread = accelerometerThread
+        accelerometerThread.start()
 
         try {
             val audioRecordDataHandlerJob = GlobalScope.launch {
@@ -429,7 +217,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
             val readData = shortBuffer.slice(readDataIndices)
             val maxValue = readData.maxOrNull()
 
-            val amplitudeThreshold = amplitudeThreshold
+            val amplitudeThreshold = soundAmplitudeThreshold
             val recordEndOffset = this.recordEndOffset
             if (recordEndOffset == null && amplitudeThreshold != null && maxValue != null && maxValue > amplitudeThreshold) {
                 if (accelerometerThread != null) {
@@ -439,6 +227,8 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
                             timeNsEndOffset -= maxRecordReadCalls
                         }
                         this.recordEndOffset = timeNsEndOffset * audioBufferSize
+                        Log.e(TAG, "Cough Registered")
+                        Log.e(TAG, accelerometerThread!!.currentAccelerometer.toString())
                     }
                 } else {
                     var timeNsEndOffset = timeNsOffset + (maxRecordReadCalls / 2) - 1
@@ -504,10 +294,10 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
         }
     }
 
-    public inner class AudioRecordThread : Service() {
+    private inner class AudioRecordThread() : Thread() {
         private val isRecording: AtomicBoolean = AtomicBoolean(true)
 
-        override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        override fun run() {
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
 
             try {
@@ -540,28 +330,6 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
             } catch (e: IOException) {
                 throw RuntimeException("Writing of recorded audio failed", e)
             }
-            return START_STICKY
-        }
-
-        private fun createNotificationChannel() {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                // you can create multiple channels and deliver different type of notifications through different channels
-                val notificationChannel = NotificationChannel("progress_channel", "Progress", NotificationManager.IMPORTANCE_DEFAULT)
-                val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-                notificationManager.createNotificationChannel(notificationChannel)
-            }
-        }
-
-        private val notification by lazy {
-            NotificationCompat.Builder(this, "progress_channel")
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle("Processing your images ...")
-                .build()
-        }
-
-        override fun onDestroy() {
-            isRecording.set(false)
-            super.onDestroy()
         }
 
         private fun getBufferReadFailureReason(errorCode: Int): String {
@@ -573,8 +341,6 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
                 else -> "Unknown ($errorCode)"
             }
         }
-
-        override fun onBind(intent: Intent?): IBinder? = null
     }
 
     private inner class AudioSaver {
@@ -674,9 +440,9 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
         private fun sendToServer() {
             val apiPost = "http://cough.bfsoft.su/api/files/"
 
-            val multipart = MultipartUtility(apiPost)
-            multipart.addFormField("id_examination", "128")
-            multipart.addFormField("exam_name", "TEST2")
+            val multipart = MultipartUtility(apiPost, token)
+            multipart.addFormField("id_examination", examination.id.toString())
+            multipart.addFormField("exam_name", examination.examination_name)
             multipart.addFilePart("file_to", File(filePath))
             multipart.finish()
             Files.deleteIfExists(Paths.get(filePath))

@@ -30,21 +30,33 @@ class MainViewModel @ViewModelInject constructor(
                 this@MainViewModel.amplitudes.postValue(prevValue)
             }
         }
-        coughRecorder.amplitudeThreshold = 2000
+        coughRecorder.soundAmplitudeThreshold = 2000
     }
 
     var baseDir: String = ""
 
-    var amplitude: String
+    var soundAmplitude: String
         get() {
-            return coughRecorder.amplitudeThreshold.toString()
+            return coughRecorder.soundAmplitudeThreshold.toString()
         }
         set(value) {
-            coughRecorder.amplitudeThreshold = value.toIntOrNull()
-            amplitudeObservable.postValue(coughRecorder.amplitudeThreshold)
+            coughRecorder.soundAmplitudeThreshold = value.toIntOrNull()
+            soundAmplitudeObservable.postValue(coughRecorder.soundAmplitudeThreshold)
         }
-    val amplitudeObservable: MutableLiveData<Int?> by lazy {
-        MutableLiveData<Int?>(coughRecorder.amplitudeThreshold)
+
+    var accelerometerAmplitude: String
+        get() {
+            return coughRecorder.accelerometerAmplitudeThreshold.toString()
+        }
+        set(value) {
+            coughRecorder.accelerometerAmplitudeThreshold = value.toIntOrNull()
+            accelerometerAmplitudeObservable.postValue(coughRecorder.accelerometerAmplitudeThreshold)
+        }
+    val soundAmplitudeObservable: MutableLiveData<Int?> by lazy {
+        MutableLiveData<Int?>(coughRecorder.soundAmplitudeThreshold)
+    }
+    val accelerometerAmplitudeObservable: MutableLiveData<Int?> by lazy {
+        MutableLiveData<Int?>(coughRecorder.accelerometerAmplitudeThreshold)
     }
 
     val amplitudesLock = Object()

@@ -58,7 +58,6 @@ class IntroActivity : AppCompatActivity() {
         jsonObject.put("username", username)
         jsonObject.put("password", password)
 
-        // Convert JSONObject to String
         val jsonObjectString = jsonObject.toString()
 
         GlobalScope.launch(Dispatchers.IO) {
@@ -68,11 +67,11 @@ class IntroActivity : AppCompatActivity() {
             httpURLConnection.setRequestProperty(
                 "Content-Type",
                 "application/json"
-            ) // The format of the content we're sending to the server
+            )
             httpURLConnection.setRequestProperty(
                 "Accept",
                 "application/json"
-            ) // The format of response we want to get from the server
+            )
             httpURLConnection.doInput = true
             httpURLConnection.doOutput = true
 
@@ -80,14 +79,11 @@ class IntroActivity : AppCompatActivity() {
             out.write(jsonObjectString)
             out.close()
 
-            // Check if the connection is successful
             val responseCode = httpURLConnection.responseCode
             if (responseCode == HttpURLConnection.HTTP_OK) {
                 val response = httpURLConnection.inputStream.bufferedReader()
                     .use { it.readText() }  // defaults to UTF-8
                 withContext(Dispatchers.Main) {
-
-                    // Convert raw JSON to pretty JSON using GSON library
                     val gson = GsonBuilder().setPrettyPrinting().create()
                     val prettyJson = gson.toJson(JsonParser.parseString(response))
                     val authResponse = gson.fromJson(prettyJson, AuthResponse::class.java)
@@ -100,6 +96,7 @@ class IntroActivity : AppCompatActivity() {
 
                         val intent = Intent(this@IntroActivity, MainActivity::class.java)
                         intent.putExtra("token", authResponse.token)
+                        intent.putExtra("userId", authResponse.userId)
                         startActivity(intent)
                         finish()
                     }

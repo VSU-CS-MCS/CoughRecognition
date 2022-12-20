@@ -3,17 +3,33 @@ package com.coughextractor
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
 import android.view.View
+import android.widget.AdapterView
+import android.widget.AdapterView.OnItemSelectedListener
+import android.widget.ArrayAdapter
+import android.widget.Spinner
 import androidx.activity.ComponentActivity
 import androidx.activity.viewModels
 import androidx.databinding.DataBindingUtil
 import com.coughextractor.databinding.ActivityMainBinding
+import com.coughextractor.recorder.Examination
+import com.coughextractor.recorder.ExaminationsResponse
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.utils.ColorTemplate
+import com.google.common.net.HttpHeaders.USER_AGENT
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonParser
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.concurrent.timer
 
 
@@ -24,15 +40,74 @@ private const val REQUEST_PERMISSION_CODE = 200
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    var examinations: List<Examination> = listOf()
     val viewModel: MainViewModel by viewModels()
-
+    var userId: Int = -1
+    var examinationNames: MutableList<String> = mutableListOf()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val extras = intent.extras
         if (extras != null) {
-            viewModel.coughRecorder.token = extras.getString("token").toString()
-            //The key argument here must match that used in the other activity
+            val token = extras.getString("token").toString()
+            viewModel.coughRecorder.token = token
+            userId = extras.getInt("userId", -1)
+            val ref = this
+            GlobalScope.launch(Dispatchers.IO) {
+                val url = URL("http://cough.bfsoft.su/api/examinations/17")
+                val httpURLConnection = url.openConnection() as HttpURLConnection
+                httpURLConnection.requestMethod = "GET"
+                httpURLConnection.setRequestProperty("User-Agent", USER_AGENT)
+                httpURLConnection.setRequestProperty("Authorization", "token $token")
+                val responseCode = httpURLConnection.responseCode
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    val response = httpURLConnection.inputStream.bufferedReader()
+                        .use { it.readText() }  // defaults to UTF-8
+                    withContext(Dispatchers.Main) {
+                        val gson = GsonBuilder().setPrettyPrinting().create()
+                        val prettyJson = gson.toJson(JsonParser.parseString(response))
+                        val examinationsResponse =
+                            gson.fromJson(prettyJson, ExaminationsResponse::class.java)
+
+                        examinationsResponse.examinations.forEach { it ->
+                            if (it.examination_name.isNotEmpty()) {
+                                examinationNames.add(it.examination_name)
+                            }
+                        }
+                        examinations = examinationsResponse.examinations
+
+                        if (examinationNames.isNotEmpty()) {
+                            val staticSpinner = findViewById<View>(R.id.examinations) as Spinner
+
+                            val staticAdapter = ArrayAdapter(
+                                ref,
+                                R.layout.support_simple_spinner_dropdown_item,
+                                examinationNames
+                            )
+                            staticAdapter.setDropDownViewResource(R.layout.support_simple_spinner_dropdown_item)
+
+                            staticSpinner.adapter = staticAdapter
+
+                            staticSpinner.onItemSelectedListener = object : OnItemSelectedListener {
+                                override fun onItemSelected(
+                                    parent: AdapterView<*>, view: View,
+                                    position: Int, id: Long
+                                ) {
+                                    ref.viewModel.coughRecorder.examination = examinations.first {
+                                        it.examination_name == parent.getItemAtPosition(position)
+                                    }
+                                }
+
+                                override fun onNothingSelected(parent: AdapterView<*>?) {
+                                    // TODO Auto-generated method stub
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Log.e("HTTPURLCONNECTION_ERROR", responseCode.toString())
+                }
+            }
         }
 
         viewModel.baseDir = externalCacheDir?.absolutePath ?: ""
@@ -44,7 +119,9 @@ class MainActivity : ComponentActivity() {
         binding.viewModel = viewModel
         binding.lifecycleOwner = this
 
-        val chart = findViewById<View>(R.id.chart) as LineChart
+
+        val soundChart = findViewById<View>(R.id.chart) as LineChart
+        val accelerometerChart = findViewById<View>(R.id.accelerometerChart) as LineChart
 
         val amplitudesEntries: MutableList<Entry> = ArrayList(viewModel.amplitudesLength)
         val amplitudesDataSet =
@@ -59,18 +136,26 @@ class MainActivity : ComponentActivity() {
         amplitudeThresholdDataSet.color = ColorTemplate.VORDIPLOM_COLORS[1]
 
         val amplitudesDataSetLineData = LineData(amplitudesDataSet, amplitudeThresholdDataSet)
-        chart.data = amplitudesDataSetLineData
+        soundChart.data = amplitudesDataSetLineData
 
-        viewModel.amplitudeObservable.observe(this) {
-
-
+        viewModel.soundAmplitudeObservable.observe(this) {
             amplitudeThresholdDataSet.clear()
             amplitudeThresholdDataSet.addEntry(Entry(viewModel.amplitudesLength.toFloat(), 0.0f))
 
             amplitudeThresholdDataSet.notifyDataSetChanged()
             amplitudesDataSetLineData.notifyDataChanged()
-            chart.notifyDataSetChanged()
-            chart.invalidate()
+            soundChart.notifyDataSetChanged()
+            soundChart.invalidate()
+        }
+
+        viewModel.accelerometerAmplitudeObservable.observe(this) {
+            amplitudeThresholdDataSet.clear()
+            amplitudeThresholdDataSet.addEntry(Entry(viewModel.amplitudesLength.toFloat(), 0.0f))
+
+            amplitudeThresholdDataSet.notifyDataSetChanged()
+            amplitudesDataSetLineData.notifyDataChanged()
+            soundChart.notifyDataSetChanged()
+            soundChart.invalidate()
         }
 
         timer("Chart Updater", period = 1000 / 24) {
@@ -88,8 +173,8 @@ class MainActivity : ComponentActivity() {
 
                     amplitudesDataSet.notifyDataSetChanged()
                     amplitudesDataSetLineData.notifyDataChanged()
-                    chart.notifyDataSetChanged()
-                    chart.invalidate()
+                    soundChart.notifyDataSetChanged()
+                    soundChart.invalidate()
                 }
             }
         }
