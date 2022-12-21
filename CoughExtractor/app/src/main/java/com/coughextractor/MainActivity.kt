@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
             userId = extras.getInt("userId", -1)
             val ref = this
             GlobalScope.launch(Dispatchers.IO) {
-                val url = URL("http://cough.bfsoft.su/api/examinations/17")
+                val url = URL("http://cough.bfsoft.su/api/examinations/$userId")
                 val httpURLConnection = url.openConnection() as HttpURLConnection
                 httpURLConnection.requestMethod = "GET"
                 httpURLConnection.setRequestProperty("User-Agent", USER_AGENT)
@@ -88,14 +88,28 @@ class MainActivity : ComponentActivity() {
 
                             staticSpinner.adapter = staticAdapter
 
+                            val sp = getSharedPreferences("selectedExamination", MODE_PRIVATE)
+                            val index = examinationNames.indexOf(sp.getString("examination", null))
+                            if (index >= 0) {
+                                staticSpinner.setSelection(index)
+                            }
+
                             staticSpinner.onItemSelectedListener = object : OnItemSelectedListener {
                                 override fun onItemSelected(
                                     parent: AdapterView<*>, view: View,
                                     position: Int, id: Long
                                 ) {
-                                    ref.viewModel.coughRecorder.examination = examinations.first {
+                                    val selectedExamination = examinations.first {
                                         it.examination_name == parent.getItemAtPosition(position)
                                     }
+                                    ref.viewModel.coughRecorder.examination = selectedExamination
+
+                                    val editor = sp.edit()
+                                    editor.putString(
+                                        "examination",
+                                        selectedExamination.id.toString()
+                                    )
+                                    editor.apply()
                                 }
 
                                 override fun onNothingSelected(parent: AdapterView<*>?) {
@@ -119,9 +133,7 @@ class MainActivity : ComponentActivity() {
         binding.viewModel = viewModel
         binding.lifecycleOwner = this
 
-
-        val soundChart = findViewById<View>(R.id.chart) as LineChart
-        val accelerometerChart = findViewById<View>(R.id.accelerometerChart) as LineChart
+        val audioChart = findViewById<View>(R.id.chart) as LineChart
 
         val amplitudesEntries: MutableList<Entry> = ArrayList(viewModel.amplitudesLength)
         val amplitudesDataSet =
@@ -136,7 +148,25 @@ class MainActivity : ComponentActivity() {
         amplitudeThresholdDataSet.color = ColorTemplate.VORDIPLOM_COLORS[1]
 
         val amplitudesDataSetLineData = LineData(amplitudesDataSet, amplitudeThresholdDataSet)
-        soundChart.data = amplitudesDataSetLineData
+        audioChart.data = amplitudesDataSetLineData
+
+        val accelerometerChart = findViewById<View>(R.id.accelerometerChart) as LineChart
+        val accelerometerEntries: MutableList<Entry> = ArrayList(viewModel.amplitudesLength)
+        val accelerometerDataSet =
+            LineDataSet(accelerometerEntries, getString(R.string.chart_amplitude_label))
+        accelerometerDataSet.setDrawCircles(false)
+        accelerometerDataSet.color = ColorTemplate.VORDIPLOM_COLORS[0]
+
+        val accelerometerThresholdEntries: MutableList<Entry> =
+            ArrayList(viewModel.amplitudesLength)
+        val accelerometerThresholdDataSet =
+            LineDataSet(accelerometerThresholdEntries, getString(R.string.amplitude_label))
+        accelerometerThresholdDataSet.setDrawCircles(false)
+        accelerometerThresholdDataSet.color = ColorTemplate.VORDIPLOM_COLORS[1]
+
+        val accelerometerDataSetLineData =
+            LineData(accelerometerDataSet, accelerometerThresholdDataSet)
+        accelerometerChart.data = accelerometerDataSetLineData
 
         viewModel.soundAmplitudeObservable.observe(this) {
             amplitudeThresholdDataSet.clear()
@@ -144,18 +174,23 @@ class MainActivity : ComponentActivity() {
 
             amplitudeThresholdDataSet.notifyDataSetChanged()
             amplitudesDataSetLineData.notifyDataChanged()
-            soundChart.notifyDataSetChanged()
-            soundChart.invalidate()
+            audioChart.notifyDataSetChanged()
+            audioChart.invalidate()
         }
 
         viewModel.accelerometerAmplitudeObservable.observe(this) {
-            amplitudeThresholdDataSet.clear()
-            amplitudeThresholdDataSet.addEntry(Entry(viewModel.amplitudesLength.toFloat(), 0.0f))
+            accelerometerThresholdDataSet.clear()
+            accelerometerThresholdDataSet.addEntry(
+                Entry(
+                    viewModel.amplitudesLength.toFloat(),
+                    0.0f
+                )
+            )
 
-            amplitudeThresholdDataSet.notifyDataSetChanged()
-            amplitudesDataSetLineData.notifyDataChanged()
-            soundChart.notifyDataSetChanged()
-            soundChart.invalidate()
+            accelerometerThresholdDataSet.notifyDataSetChanged()
+            accelerometerDataSetLineData.notifyDataChanged()
+            accelerometerChart.notifyDataSetChanged()
+            accelerometerChart.invalidate()
         }
 
         timer("Chart Updater", period = 1000 / 24) {
@@ -173,8 +208,24 @@ class MainActivity : ComponentActivity() {
 
                     amplitudesDataSet.notifyDataSetChanged()
                     amplitudesDataSetLineData.notifyDataChanged()
-                    soundChart.notifyDataSetChanged()
-                    soundChart.invalidate()
+                    audioChart.notifyDataSetChanged()
+                    audioChart.invalidate()
+                }
+                synchronized(viewModel.accLock) {
+                    val accelerometry = viewModel.accelerometry.value!!
+                    accelerometerDataSet.clear()
+                    for (accelerometr in accelerometry.withIndex()) {
+                        accelerometerDataSet.addEntry(
+                            Entry(
+                                accelerometr.index.toFloat(), accelerometr.value
+                            )
+                        )
+                    }
+
+                    accelerometerDataSet.notifyDataSetChanged()
+                    accelerometerDataSetLineData.notifyDataChanged()
+                    accelerometerChart.notifyDataSetChanged()
+                    accelerometerChart.invalidate()
                 }
             }
         }

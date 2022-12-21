@@ -3,6 +3,7 @@ package com.coughextractor
 import androidx.hilt.lifecycle.ViewModelInject
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import com.coughextractor.recorder.AccelerometerThread
 import com.coughextractor.recorder.AmplitudeCoughRecorder
 import kotlin.math.roundToInt
 
@@ -31,6 +32,25 @@ class MainViewModel @ViewModelInject constructor(
             }
         }
         coughRecorder.soundAmplitudeThreshold = 2000
+
+        coughRecorder.onAccelerometryUpdate = { accelerometry ->
+            synchronized(accLock) {
+                val prevValue = this@MainViewModel.accelerometry.value!!
+                val indices = 0 until coughRecorder.audioBufferSize step amplitudesStep
+
+                if (prevValue.count() >= amplitudesLength) {
+                    for (index in indices) {
+                        prevValue.removeAt(0)
+                    }
+                }
+
+                for (index in indices) {
+                    prevValue.add(accelerometry.toFloat())
+                }
+                this@MainViewModel.accelerometry.postValue(prevValue)
+            }
+        }
+        coughRecorder.accelerometerAmplitudeThreshold = 500
     }
 
     var baseDir: String = ""
@@ -49,7 +69,7 @@ class MainViewModel @ViewModelInject constructor(
             return coughRecorder.accelerometerAmplitudeThreshold.toString()
         }
         set(value) {
-            coughRecorder.accelerometerAmplitudeThreshold = value.toIntOrNull()
+            coughRecorder.accelerometerAmplitudeThreshold = value.toInt()
             accelerometerAmplitudeObservable.postValue(coughRecorder.accelerometerAmplitudeThreshold)
         }
     val soundAmplitudeObservable: MutableLiveData<Int?> by lazy {
@@ -60,6 +80,7 @@ class MainViewModel @ViewModelInject constructor(
     }
 
     val amplitudesLock = Object()
+    val accLock = Object()
     private val amplitudesTimeLengthSec = 6
     private val amplitudesStep = 150
     private val amplitudesPerRead =
@@ -69,6 +90,10 @@ class MainViewModel @ViewModelInject constructor(
     val amplitudesLength =
         (amplitudesTimeLengthSec * amplitudesPerRead / amplitudesPerReadTimeSec).roundToInt()
     val amplitudes: MutableLiveData<ArrayList<Float>> by lazy {
+        MutableLiveData<ArrayList<Float>>(ArrayList(amplitudesLength))
+    }
+
+    val accelerometry: MutableLiveData<ArrayList<Float>> by lazy {
         MutableLiveData<ArrayList<Float>>(ArrayList(amplitudesLength))
     }
 
@@ -84,6 +109,7 @@ class MainViewModel @ViewModelInject constructor(
     fun powerClick() {
         if (!coughRecorder.isRecording) {
             amplitudes.postValue(ArrayList())
+            accelerometry.postValue(ArrayList())
             coughRecorder.baseDir = baseDir
             coughRecorder.start()
         } else {

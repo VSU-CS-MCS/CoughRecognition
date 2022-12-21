@@ -5,10 +5,10 @@
             <!-- background -->
             <solid android:color="@color/transparent" />
             <!-- border -->
-            <stroke android:width="2dp" android:color="#525DAA" />
+            <stroke android:width="2dp" android:color="#C4C8EB" />
 
             <!-- corner roundness -->
-            <corners android:radius="100dp" />
+            <corners android:radius="24dp" />
         </shape>
     </item>
 </selector>

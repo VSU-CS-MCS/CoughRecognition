@@ -4,8 +4,14 @@
     <string name="amplitude_label">Предел амплитуды звука:</string>
     <string name="accelerometer_label">Предел амплитуды акселерометра:</string>
     <string name="chart_amplitude_label">Амплитуда звука:</string>
-    <string name="chart_accelerometer_label">Амплитуда звука:</string>
+    <string name="chart_accelerometer_label">Амплитуда акселерометрии:</string>
 
     <string name="bgImage">bgImage</string>
     <string name="password">Password</string>
+    <string name="enterUsernameText">Введите имя пользователя</string>
+    <string name="rememberMeText">Запомнить меня</string>
+    <string name="enterPasswordText">Введите пароль</string>
+    <string name="passwordText">Пароль:</string>
+    <string name="usernameText">Имя пользователя:</string>
+    <string name="loginText">Войти</string>
 </resources>

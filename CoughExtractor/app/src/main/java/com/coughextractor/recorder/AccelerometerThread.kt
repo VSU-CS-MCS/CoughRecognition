@@ -16,22 +16,26 @@ class AccelerometerThread : Thread() {
     private var prevAccelerometer = Accelerometer(0, 0, 0, 0, 0)
     var isCough = AtomicBoolean(false)
     var device: BluetoothDevice? = null
+    lateinit var onAccelerometryUpdate: (amplitudes: Short) -> Unit
 
     init {
 
     }
 
-    private fun connect(): BluetoothSocket? {
+    private fun connectToDevice(): BluetoothSocket? {
         val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
         for (device in bluetoothAdapter.bondedDevices) {
             if (device.name == "HC-COUGH") {
                 this.device = device
             }
         }
-        val id: UUID = device?.uuids?.get(0)!!.uuid
-        val bts = device!!.createRfcommSocketToServiceRecord(id)
-        bts?.connect()
-        return bts
+        if (device !== null) {
+            val id: UUID = device?.uuids?.get(0)!!.uuid
+            val bts = device!!.createRfcommSocketToServiceRecord(id)
+            bts?.connect()
+            return bts
+        }
+        return null
     }
 
     private fun InputStream.readUpToChar(stopChar: Char): String {
@@ -53,43 +57,47 @@ class AccelerometerThread : Thread() {
     }
 
     private fun readingLoop() {
-            val inputStream: InputStream = connect()?.inputStream!!
-            var string = ""
-            try {
-                while (true) {
-                    string = inputStream.readUpToChar('\r')
-                    if (string.endsWith("=") || !string.contains("Xa=")
-                        || !string.contains("Ya=") || !string.contains("X=")
-                        || !string.contains("Y=") || !string.contains("ADC=")
-                    ) {
-                        sleep(50)
-                        continue
-                    }
-                    val builder = java.lang.StringBuilder()
-                    builder.append('{')
-                    string = string.trim(' ', '\"', '\n', '\r')
-                    string.replace("=".toRegex(), " : ").also { string = it }
-                    string.replace("\t".toRegex(), ",").also { string = it }
-                    builder.append(string)
-                    builder.append('}')
-
-                    val gson = GsonBuilder().setPrettyPrinting().create()
-                    currentAccelerometer =
-                        gson.fromJson(builder.toString(), Accelerometer::class.java)
-                    Log.e("ACCELEROMETER", currentAccelerometer.toString())
-                    if ((abs(prevAccelerometer.Xa - currentAccelerometer.Xa) > 1000 ||
-                        abs(prevAccelerometer.Ya - currentAccelerometer.Ya) > 1000) && abs(prevAccelerometer.ADC - currentAccelerometer.ADC) > 100
-                    ) {
-                        this.isCough.set(true)
-                    } else {
-                        this.isCough.set(false)
-                    }
-                    this.prevAccelerometer = currentAccelerometer
-                    sleep(1)
+        val bluetoothSocket = connectToDevice() ?: return
+        val inputStream: InputStream = bluetoothSocket.inputStream!!
+        var string = ""
+        try {
+            while (true) {
+                string = inputStream.readUpToChar('\r')
+                if (string.endsWith("=") || !string.contains("Xa=")
+                    || !string.contains("Ya=") || !string.contains("X=")
+                    || !string.contains("Y=") || !string.contains("ADC=")
+                ) {
+                    sleep(50)
+                    continue
                 }
-            } catch (e: Exception) {
-                println(string)
-                readingLoop()
+                val builder = java.lang.StringBuilder()
+                builder.append('{')
+                string = string.trim(' ', '\"', '\n', '\r')
+                string.replace("=".toRegex(), " : ").also { string = it }
+                string.replace("\t".toRegex(), ",").also { string = it }
+                builder.append(string)
+                builder.append('}')
+
+                val gson = GsonBuilder().setPrettyPrinting().create()
+                currentAccelerometer =
+                    gson.fromJson(builder.toString(), Accelerometer::class.java)
+                Log.e("ACCELEROMETER", currentAccelerometer.toString())
+                if ((abs(prevAccelerometer.Xa - currentAccelerometer.Xa) > 1000 ||
+                            abs(prevAccelerometer.Ya - currentAccelerometer.Ya) > 1000) && abs(
+                        prevAccelerometer.ADC - currentAccelerometer.ADC
+                    ) > 100
+                ) {
+                    this.isCough.set(true)
+                } else {
+                    this.isCough.set(false)
+                }
+                onAccelerometryUpdate(currentAccelerometer.ADC.toShort())
+                this.prevAccelerometer = currentAccelerometer
+                sleep(1)
             }
+        } catch (e: Exception) {
+            println(string)
+            readingLoop()
+        }
     }
 }

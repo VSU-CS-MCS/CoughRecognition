@@ -15,28 +15,38 @@
         tools:context=".MainActivity">
 
         <TextView
+            android:id="@+id/accelerometerMaxAmplitude"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/chart_accelerometer_label"
+            app:layout_constraintBottom_toTopOf="@+id/accelerometerChart"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/accelerometerAmplitude" />
+
+        <TextView
             android:id="@+id/textViewAmplitude"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:layout_marginTop="104dp"
+            android:layout_marginTop="8dp"
             android:layout_marginEnd="8dp"
             android:text="@string/amplitude_label"
+            app:layout_constraintBottom_toTopOf="@+id/editText"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toBottomOf="@+id/examinations" />
 
         <EditText
             android:id="@+id/editText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:layout_marginTop="8dp"
             android:layout_marginEnd="8dp"
-            android:layout_marginBottom="24dp"
             android:inputType="number"
-            android:minHeight="48dp"
+            android:minHeight="36dp"
             android:text="@={viewModel.soundAmplitude}"
             app:layout_constraintBottom_toTopOf="@+id/textViewMaxAmplitude"
             app:layout_constraintEnd_toEndOf="parent"
@@ -48,9 +58,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="8dp"
             android:layout_marginEnd="8dp"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="8dp"
             android:background="@android:drawable/btn_dropdown"
             android:spinnerMode="dropdown"
             app:layout_constraintBottom_toTopOf="@+id/textViewAmplitude"
@@ -64,19 +74,21 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="8dp"
             android:text="@string/chart_amplitude_label"
+            app:layout_constraintBottom_toTopOf="@+id/chart"
+            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/editText" />
 
         <com.github.mikephil.charting.charts.LineChart
             android:id="@+id/chart"
             android:layout_width="match_parent"
-            android:layout_height="150dp"
+            android:layout_height="130dp"
             android:layout_marginStart="8dp"
-            android:layout_marginTop="8dp"
             android:layout_marginEnd="8dp"
-            android:layout_marginBottom="32dp"
+            android:layout_marginBottom="8dp"
+            app:layout_constraintBottom_toTopOf="@+id/textViewAccelerometerAmplitude"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/textViewMaxAmplitude" />
@@ -86,56 +98,54 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:layout_marginTop="388dp"
             android:layout_marginEnd="8dp"
             android:text="@string/accelerometer_label"
+            app:layout_constraintBottom_toTopOf="@+id/accelerometerAmplitude"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toBottomOf="@+id/chart" />
 
         <EditText
             android:id="@+id/accelerometerAmplitude"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:layout_marginTop="8dp"
             android:layout_marginEnd="8dp"
-            android:layout_marginBottom="24dp"
             android:inputType="number"
-            android:minHeight="48dp"
-            android:text="@={viewModel.soundAmplitude}"
-            app:layout_constraintTop_toBottomOf="@+id/textViewAccelerometerAmplitude"
-            tools:layout_editor_absoluteX="8dp" />
+            android:minHeight="36dp"
+            android:text="@={viewModel.accelerometerAmplitude}"
+            app:layout_constraintBottom_toTopOf="@+id/accelerometerMaxAmplitude"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/textViewAccelerometerAmplitude" />
 
         <com.github.mikephil.charting.charts.LineChart
             android:id="@+id/accelerometerChart"
             android:layout_width="match_parent"
-            android:layout_height="150dp"
+            android:layout_height="130dp"
             android:layout_marginStart="8dp"
             android:layout_marginEnd="8dp"
+            android:layout_marginBottom="8dp"
+            app:layout_constraintBottom_toTopOf="@+id/imageButton"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="1.0"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/accelerometerAmplitude" />
+            app:layout_constraintTop_toBottomOf="@+id/accelerometerMaxAmplitude" />
 
         <ImageButton
             android:id="@+id/imageButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="8dp"
             android:layout_marginEnd="8dp"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="8dp"
             android:minHeight="48dp"
             android:onClick="@{() -> viewModel.powerClick()}"
             android:src="@drawable/ic_power_24"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/chart"
-            app:layout_constraintVertical_bias="1.0" />
+            app:layout_constraintTop_toBottomOf="@+id/accelerometerChart" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 </layout>
 

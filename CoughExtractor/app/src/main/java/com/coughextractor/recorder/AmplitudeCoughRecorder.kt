@@ -31,9 +31,10 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
     override var fileName: String = ""
 
     override lateinit var onAmplitudesUpdate: (amplitudes: Array<Short>) -> Unit
+    override lateinit var onAccelerometryUpdate: (amplitudes: Short) -> Unit
     var soundAmplitudeThreshold: Int? = null
 
-    var accelerometerAmplitudeThreshold: Int? = null
+    var accelerometerAmplitudeThreshold: Int = 500
 
     private var audioRecorder: AudioRecord? = null
     private var recordingThread: AudioRecordThread? = null
@@ -71,6 +72,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
      * Max amount of amplitudes to store per recording
      */
     val maxRecordBufferSize = maxRecordReadCalls * audioBufferSize
+    val amplitudesLock = Object()
 
     private val audioRecordDataChannel = Channel<Pair<ShortArray, Long>>(Channel.BUFFERED)
     private var audioRecordDataHandlerJob: Job? = null
@@ -156,6 +158,11 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
             //
         }
 
+        accelerometerThread.onAccelerometryUpdate = { accelerometry ->
+            synchronized(amplitudesLock) {
+                onAccelerometryUpdate(accelerometry)
+            }
+        }
 
     }
 
@@ -221,7 +228,8 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
             val recordEndOffset = this.recordEndOffset
             if (recordEndOffset == null && amplitudeThreshold != null && maxValue != null && maxValue > amplitudeThreshold) {
                 if (accelerometerThread != null) {
-                    if (accelerometerThread!!.isCough.get()) {
+                    onAccelerometryUpdate(accelerometerThread!!.currentAccelerometer.ADC.toShort())
+                    if (accelerometerThread!!.currentAccelerometer.ADC > accelerometerAmplitudeThreshold) {
                         var timeNsEndOffset = timeNsOffset + (maxRecordReadCalls / 2) - 1
                         if (timeNsEndOffset >= maxRecordReadCalls) {
                             timeNsEndOffset -= maxRecordReadCalls

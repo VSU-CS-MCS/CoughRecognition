@@ -7,7 +7,6 @@ import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.coughextractor.recorder.AuthResponse
 import com.google.gson.GsonBuilder
@@ -25,41 +24,31 @@ import java.net.URL
 
 class LoginActivity : AppCompatActivity(), View.OnClickListener {
     var rememberMeCheckBox: CheckBox? = null
-    var btnForgotPassword: TextView? = null
     var edtEmail: EditText? = null
     var edtPassword: EditText? = null
-    var btn_Login: Button? = null
+    private var btnLogin: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
-
-        // Initialize edtEmail and edtPassword
         edtEmail = findViewById(R.id.editUsername)
         edtPassword = findViewById(R.id.editPassword)
 
-        // Initialize Login Button
-        btn_Login = findViewById(R.id.login_btn)
-        btn_Login?.setOnClickListener(this)
+        btnLogin = findViewById(R.id.login_btn)
+        btnLogin?.setOnClickListener(this)
 
-        // Initialize Forgot Password Button
-        btnForgotPassword = findViewById(R.id.forgotPassword)
-        btnForgotPassword?.setOnClickListener(this)
-
-        rememberMeCheckBox = findViewById(R.id.remember_me)
+        rememberMeCheckBox = findViewById(R.id.rememberMe)
     }
 
     override fun onClick(view: View) {
         when (view.id) {
-            R.id.login_btn -> patientLogin()
-            R.id.forgotPassword -> startActivity(Intent(this, ForgotPasswordActivity::class.java))
+            R.id.login_btn -> login()
         }
     }
 
-    private fun patientLogin() {
+    private fun login() {
         val email = edtEmail!!.text.toString().trim { it <= ' ' }
         val password = edtPassword!!.text.toString().trim { it <= ' ' }
-        //        String password = edtPassword.getText().toString().trim();
         if (email.isEmpty()) {
             edtEmail!!.error = "Email is required"
             edtEmail!!.requestFocus()
@@ -70,11 +59,6 @@ class LoginActivity : AppCompatActivity(), View.OnClickListener {
             edtPassword!!.requestFocus()
             return
         }
-        /*if (password.length < 8) {
-            edtPassword!!.error = "Minimum length of password should be 8"
-            edtPassword!!.requestFocus()
-            return
-        }*/
         authorization(email, password)
     }
 
