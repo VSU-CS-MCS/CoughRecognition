@@ -1,19 +1,74 @@
 package com.coughextractor
 
+import android.app.Application
+import android.content.Intent
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.ViewModelInject
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import com.coughextractor.recorder.AccelerometerThread
 import com.coughextractor.recorder.AmplitudeCoughRecorder
+import com.coughextractor.recorder.Examination
+import com.coughextractor.recorder.MyBinder
 import kotlin.math.roundToInt
 
 private const val TAG = "MainViewModel"
 
 class MainViewModel @ViewModelInject constructor(
+    application: Application,
     val coughRecorder: AmplitudeCoughRecorder
-) : ViewModel() {
+) : AndroidViewModel(application) {
 
-    init {
+    var serviceBinder: MyBinder? = null
+
+    fun bindService(serviceBinder: MyBinder) {
+        this.serviceBinder = serviceBinder
+        serviceBinder.setonAmplitudesUpdate { amplitudes ->
+            synchronized(amplitudesLock) {
+                val prevValue = this@MainViewModel.amplitudes.value!!
+                val indices = 0 until coughRecorder.audioBufferSize step amplitudesStep
+
+                if (prevValue.count() >= amplitudesLength) {
+                    for (index in indices) {
+                        prevValue.removeAt(0)
+                    }
+                }
+
+                for (index in indices) {
+                    prevValue.add(amplitudes[index].toFloat())
+                }
+                this@MainViewModel.amplitudes.postValue(prevValue)
+            }
+        }
+
+        serviceBinder.setonAccelerometryUpdate { accelerometry ->
+            synchronized(accLock) {
+                val prevValue = this@MainViewModel.accelerometry.value!!
+                val indices = 0 until coughRecorder.audioBufferSize step amplitudesStep
+
+                if (prevValue.count() >= amplitudesLength) {
+                    for (index in indices) {
+                        prevValue.removeAt(0)
+                    }
+                }
+
+                for (index in indices) {
+                    prevValue.add(accelerometry.toFloat())
+                }
+                this@MainViewModel.accelerometry.postValue(prevValue)
+            }
+        }
+
+        serviceBinder.setBaseDir(baseDir)
+        serviceBinder.setToken(token)
+        serviceBinder.setExamination(examination)
+    }
+
+    fun unbindService() {
+        serviceBinder = null
+    }
+
+    private fun init() {
         coughRecorder.onAmplitudesUpdate = { amplitudes ->
             synchronized(amplitudesLock) {
                 val prevValue = this@MainViewModel.amplitudes.value!!
@@ -54,6 +109,8 @@ class MainViewModel @ViewModelInject constructor(
     }
 
     var baseDir: String = ""
+    var token: String = ""
+    lateinit var examination: Examination
 
     var soundAmplitude: String
         get() {
@@ -69,7 +126,7 @@ class MainViewModel @ViewModelInject constructor(
             return coughRecorder.accelerometerAmplitudeThreshold.toString()
         }
         set(value) {
-            coughRecorder.accelerometerAmplitudeThreshold = value.toInt()
+            coughRecorder.accelerometerAmplitudeThreshold = value.toIntOrNull()
             accelerometerAmplitudeObservable.postValue(coughRecorder.accelerometerAmplitudeThreshold)
         }
     val soundAmplitudeObservable: MutableLiveData<Int?> by lazy {
@@ -103,17 +160,18 @@ class MainViewModel @ViewModelInject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        coughRecorder.stop()
+        coughRecorder.stopForeground(true)
     }
 
     fun powerClick() {
         if (!coughRecorder.isRecording) {
             amplitudes.postValue(ArrayList())
             accelerometry.postValue(ArrayList())
-            coughRecorder.baseDir = baseDir
-            coughRecorder.start()
+            val intent = Intent(getApplication(), AmplitudeCoughRecorder::class.java)
+            ContextCompat.startForegroundService(getApplication(), intent)
+
         } else {
-            coughRecorder.stop()
+            coughRecorder.stopRecording()
         }
         isRecording.postValue(coughRecorder.isRecording)
     }

@@ -45,7 +45,16 @@ class IntroActivity : AppCompatActivity() {
                 finish()
             }, SPLASH_TIME_OUT.toLong())
         } else {
-            authorization(username, password)
+            try {
+                authorization(username, password)
+            } catch (e: Exception) {
+                println(e.message)
+                Handler().postDelayed({
+                    val intent = Intent(this@IntroActivity, LoginActivity::class.java)
+                    startActivity(intent)
+                    finish()
+                }, SPLASH_TIME_OUT.toLong())
+            }
         }
     }
 
@@ -61,7 +70,7 @@ class IntroActivity : AppCompatActivity() {
         val jsonObjectString = jsonObject.toString()
 
         GlobalScope.launch(Dispatchers.IO) {
-            val url = URL("http://cough.bfsoft.su/api-token-auth/")
+            val url = URL("http://88.83.201.153/api-token-auth/")
             val httpURLConnection = url.openConnection() as HttpURLConnection
             httpURLConnection.requestMethod = "POST"
             httpURLConnection.setRequestProperty(
@@ -87,7 +96,7 @@ class IntroActivity : AppCompatActivity() {
                     val gson = GsonBuilder().setPrettyPrinting().create()
                     val prettyJson = gson.toJson(JsonParser.parseString(response))
                     val authResponse = gson.fromJson(prettyJson, AuthResponse::class.java)
-                    if (authResponse.token.isNotEmpty()) {
+                    if (!authResponse.token.isNullOrEmpty()) {
                         val sp = getSharedPreferences("Login", MODE_PRIVATE)
                         val Ed = sp.edit()
                         Ed.putString("Username", username)
@@ -96,9 +105,15 @@ class IntroActivity : AppCompatActivity() {
 
                         val intent = Intent(this@IntroActivity, MainActivity::class.java)
                         intent.putExtra("token", authResponse.token)
-                        intent.putExtra("userId", authResponse.userId)
+                        intent.putExtra("userId", authResponse.user_id)
                         startActivity(intent)
                         finish()
+                    } else {
+                        Handler().postDelayed({
+                            val intent = Intent(this@IntroActivity, LoginActivity::class.java)
+                            startActivity(intent)
+                            finish()
+                        }, SPLASH_TIME_OUT.toLong())
                     }
                 }
             } else {

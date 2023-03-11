@@ -1,10 +1,10 @@
 package com.coughextractor.recorder
 
 data class AuthResponse(
-    val token: String,
-    val username: String,
-    val email: String,
-    val userId: Int
+    val token: String?,
+    val username: String?,
+    val email: String?,
+    val user_id: Int?
 )
 
 data class ExaminationsResponse(

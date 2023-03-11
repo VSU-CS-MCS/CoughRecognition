@@ -1,12 +1,23 @@
 package com.coughextractor.recorder
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.bluetooth.BluetoothAdapter
+import android.content.Context
+import android.content.Intent
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
+import android.os.Binder
+import android.os.Build
+import android.os.IBinder
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import com.coughextractor.R
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import java.io.File
@@ -21,10 +32,51 @@ import java.time.format.DateTimeFormatter
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
+
 private const val TAG = "AmplitudeCoughRecorder"
 
 
-class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
+interface MyBinder {
+    fun getService(): AmplitudeCoughRecorder
+    fun setonAmplitudesUpdate(field: (Array<Short>) -> Unit)
+    fun setonAccelerometryUpdate(field: (Short) -> Unit)
+    fun setBaseDir(field: String)
+    fun setExamination(examination: Examination)
+    fun setToken(token: String)
+}
+
+class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Short> {
+    private val localBinder = LocalBinder()
+
+    inner class LocalBinder : Binder(), MyBinder {
+        override fun getService(): AmplitudeCoughRecorder {
+            return this@AmplitudeCoughRecorder
+        }
+
+        override fun setonAmplitudesUpdate(field: (Array<Short>) -> Unit) {
+            onAmplitudesUpdate = field
+        }
+
+        override fun setonAccelerometryUpdate(field: (Short) -> Unit) {
+            onAccelerometryUpdate = field
+        }
+
+        override fun setBaseDir(field: String) {
+            baseDir = field
+        }
+
+        override fun setExamination(examination: Examination) {
+            this@AmplitudeCoughRecorder.examination = examination
+        }
+
+        override fun setToken(token: String) {
+            this@AmplitudeCoughRecorder.token = token
+        }
+    }
+
+    override fun onBind(intent: Intent): IBinder {
+        return localBinder
+    }
 
     lateinit var examination: Examination
     override var isRecording: Boolean = false
@@ -32,9 +84,9 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
 
     override lateinit var onAmplitudesUpdate: (amplitudes: Array<Short>) -> Unit
     override lateinit var onAccelerometryUpdate: (amplitudes: Short) -> Unit
-    var soundAmplitudeThreshold: Int? = null
+    var soundAmplitudeThreshold: Int? = 2000
 
-    var accelerometerAmplitudeThreshold: Int = 500
+    var accelerometerAmplitudeThreshold: Int? = 500
 
     private var audioRecorder: AudioRecord? = null
     private var recordingThread: AudioRecordThread? = null
@@ -77,7 +129,39 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
     private val audioRecordDataChannel = Channel<Pair<ShortArray, Long>>(Channel.BUFFERED)
     private var audioRecordDataHandlerJob: Job? = null
 
-    override fun start() {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "my_channel_id",
+                "My Channel",
+                NotificationManager.IMPORTANCE_DEFAULT
+            )
+            val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+
+// create the notification object
+        val notification = NotificationCompat.Builder(this, "my_channel_id")
+            .setContentTitle("My Service")
+            .setContentText("Running...")
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .build()
+
+// start the service in the foreground
+        startForeground(1645, notification)
+        startRecording()
+
+        // Perform your background work here
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        stopRecording()
+    }
+
+    fun startRecording() {
         if (isRecording) {
             return
         }
@@ -137,11 +221,14 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
         val recordingThread = AudioRecordThread()
         this.recordingThread = recordingThread
         recordingThread.start()
-
-        val accelerometerThread = AccelerometerThread()
-        accelerometerThread.priority = 10
-        this.accelerometerThread = accelerometerThread
-        accelerometerThread.start()
+        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        if (bluetoothAdapter.isEnabled) {
+            val accelerometerThread = AccelerometerThread()
+            accelerometerThread.priority = 10
+            accelerometerThread.bluetoothAdapter = bluetoothAdapter
+            this.accelerometerThread = accelerometerThread
+            accelerometerThread.start()
+        }
 
         try {
             val audioRecordDataHandlerJob = GlobalScope.launch {
@@ -158,7 +245,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
             //
         }
 
-        accelerometerThread.onAccelerometryUpdate = { accelerometry ->
+        accelerometerThread?.onAccelerometryUpdate = { accelerometry ->
             synchronized(amplitudesLock) {
                 onAccelerometryUpdate(accelerometry)
             }
@@ -166,7 +253,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
 
     }
 
-    override fun stop() {
+    fun stopRecording() {
         if (!isRecording) {
             return
         }
@@ -229,7 +316,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
             if (recordEndOffset == null && amplitudeThreshold != null && maxValue != null && maxValue > amplitudeThreshold) {
                 if (accelerometerThread != null) {
                     onAccelerometryUpdate(accelerometerThread!!.currentAccelerometer.ADC.toShort())
-                    if (accelerometerThread!!.currentAccelerometer.ADC > accelerometerAmplitudeThreshold) {
+                    if (accelerometerThread!!.currentAccelerometer.ADC > accelerometerAmplitudeThreshold!!) {
                         var timeNsEndOffset = timeNsOffset + (maxRecordReadCalls / 2) - 1
                         if (timeNsEndOffset >= maxRecordReadCalls) {
                             timeNsEndOffset -= maxRecordReadCalls
@@ -446,7 +533,7 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
         }
 
         private fun sendToServer() {
-            val apiPost = "http://cough.bfsoft.su/api/files/"
+            val apiPost = "http://88.83.201.153/api/files/"
 
             val multipart = MultipartUtility(apiPost, token)
             multipart.addFormField("id_examination", examination.id.toString())
@@ -455,7 +542,5 @@ class AmplitudeCoughRecorder @Inject constructor() : CoughRecorder<Short> {
             multipart.finish()
             Files.deleteIfExists(Paths.get(filePath))
         }
-
-
     }
 }

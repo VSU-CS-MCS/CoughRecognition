@@ -71,7 +71,7 @@ class LoginActivity : AppCompatActivity(), View.OnClickListener {
         val jsonObjectString = jsonObject.toString()
 
         GlobalScope.launch(Dispatchers.IO) {
-            val url = URL("http://cough.bfsoft.su/api-token-auth/")
+            val url = URL("http://88.83.201.153/api-token-auth/")
             val httpURLConnection = url.openConnection() as HttpURLConnection
             httpURLConnection.requestMethod = "POST"
             httpURLConnection.setRequestProperty(
@@ -111,7 +111,7 @@ class LoginActivity : AppCompatActivity(), View.OnClickListener {
 
                         val intent = Intent(this@LoginActivity, MainActivity::class.java)
                         intent.putExtra("token", authResponse.token)
-                        intent.putExtra("userId", authResponse.userId)
+                        intent.putExtra("userId", authResponse.user_id)
                         startActivity(intent)
                         finish()
                     }

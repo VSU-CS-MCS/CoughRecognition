@@ -9,9 +9,11 @@ import com.google.gson.GsonBuilder
 import java.io.InputStream
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.math.abs
 
 class AccelerometerThread : Thread() {
+    lateinit var bluetoothAdapter: BluetoothAdapter
+    private var isStopped = false
+    private var bluetoothSocket: BluetoothSocket? = null
     var currentAccelerometer = Accelerometer(0, 0, 0, 0, 0)
     private var prevAccelerometer = Accelerometer(0, 0, 0, 0, 0)
     var isCough = AtomicBoolean(false)
@@ -22,20 +24,17 @@ class AccelerometerThread : Thread() {
 
     }
 
-    private fun connectToDevice(): BluetoothSocket? {
-        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
-        for (device in bluetoothAdapter.bondedDevices) {
+    private fun connectToDevice() {
+        for (device in bluetoothAdapter.bondedDevices!!) {
             if (device.name == "HC-COUGH") {
                 this.device = device
             }
         }
         if (device !== null) {
             val id: UUID = device?.uuids?.get(0)!!.uuid
-            val bts = device!!.createRfcommSocketToServiceRecord(id)
-            bts?.connect()
-            return bts
+            bluetoothSocket = device!!.createRfcommSocketToServiceRecord(id)
+            bluetoothSocket?.connect()
         }
-        return null
     }
 
     private fun InputStream.readUpToChar(stopChar: Char): String {
@@ -53,21 +52,33 @@ class AccelerometerThread : Thread() {
     }
 
     override fun run() {
-        readingLoop()
+        if (!isStopped) {
+            readingLoop()
+        }
+    }
+
+    override fun interrupt() {
+        super.interrupt()
+        isStopped = true
+        device = null
+        bluetoothSocket = null
     }
 
     private fun readingLoop() {
-        val bluetoothSocket = connectToDevice() ?: return
-        val inputStream: InputStream = bluetoothSocket.inputStream!!
+        connectToDevice()
+        if (bluetoothSocket == null) {
+            return
+        }
+        val inputStream: InputStream = bluetoothSocket!!.inputStream!!
         var string = ""
         try {
-            while (true) {
+            while (device !== null) {
                 string = inputStream.readUpToChar('\r')
                 if (string.endsWith("=") || !string.contains("Xa=")
                     || !string.contains("Ya=") || !string.contains("X=")
                     || !string.contains("Y=") || !string.contains("ADC=")
                 ) {
-                    sleep(50)
+                    sleep(5)
                     continue
                 }
                 val builder = java.lang.StringBuilder()
@@ -82,7 +93,7 @@ class AccelerometerThread : Thread() {
                 currentAccelerometer =
                     gson.fromJson(builder.toString(), Accelerometer::class.java)
                 Log.e("ACCELEROMETER", currentAccelerometer.toString())
-                if ((abs(prevAccelerometer.Xa - currentAccelerometer.Xa) > 1000 ||
+                /*if ((abs(prevAccelerometer.Xa - currentAccelerometer.Xa) > 1000 ||
                             abs(prevAccelerometer.Ya - currentAccelerometer.Ya) > 1000) && abs(
                         prevAccelerometer.ADC - currentAccelerometer.ADC
                     ) > 100
@@ -90,14 +101,16 @@ class AccelerometerThread : Thread() {
                     this.isCough.set(true)
                 } else {
                     this.isCough.set(false)
-                }
+                }*/
                 onAccelerometryUpdate(currentAccelerometer.ADC.toShort())
                 this.prevAccelerometer = currentAccelerometer
                 sleep(1)
             }
         } catch (e: Exception) {
             println(string)
-            readingLoop()
+            if (!isStopped) {
+                readingLoop()
+            }
         }
     }
 }

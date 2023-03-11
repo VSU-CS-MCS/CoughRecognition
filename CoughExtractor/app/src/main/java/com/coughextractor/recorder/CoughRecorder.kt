@@ -9,6 +9,4 @@ interface CoughRecorder<TRead> {
         get() = "$fileName.wav"
     var onAmplitudesUpdate: (amplitudes: Array<TRead>) -> Unit
     var onAccelerometryUpdate: (amplitudes: TRead) -> Unit
-    fun start()
-    fun stop()
 }
