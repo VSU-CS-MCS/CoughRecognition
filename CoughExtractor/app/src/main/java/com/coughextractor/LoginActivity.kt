@@ -59,6 +59,8 @@ class LoginActivity : AppCompatActivity(), View.OnClickListener {
             edtPassword!!.requestFocus()
             return
         }
+        deleteSharedPreferences("Login")
+
         authorization(email, password)
     }
 

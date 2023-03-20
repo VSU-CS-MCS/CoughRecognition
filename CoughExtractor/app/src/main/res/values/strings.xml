@@ -1,8 +1,9 @@
 <resources>
     <string name="app_name">Cough Detector</string>
+    <string name="app_name_rus">Детектор Кашля</string>
 
-    <string name="amplitude_label">Предел амплитуды звука:</string>
-    <string name="accelerometer_label">Предел амплитуды акселерометра:</string>
+    <string name="amplitude_label">Предел звука:</string>
+    <string name="accelerometer_label">Предел акселерометра:</string>
     <string name="chart_amplitude_label">Амплитуда звука:</string>
     <string name="chart_accelerometer_label">Амплитуда акселерометрии:</string>
 
@@ -14,4 +15,5 @@
     <string name="passwordText">Пароль:</string>
     <string name="usernameText">Имя пользователя:</string>
     <string name="loginText">Войти</string>
+    <string name="AppNameRus">Детектор кашля</string>
 </resources>

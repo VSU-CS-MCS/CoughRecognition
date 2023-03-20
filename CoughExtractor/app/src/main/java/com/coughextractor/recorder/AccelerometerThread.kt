@@ -8,32 +8,33 @@ import com.coughextractor.Accelerometer
 import com.google.gson.GsonBuilder
 import java.io.InputStream
 import java.util.*
-import java.util.concurrent.atomic.AtomicBoolean
 
 class AccelerometerThread : Thread() {
+    var isConnected: Boolean = false
     lateinit var bluetoothAdapter: BluetoothAdapter
     private var isStopped = false
     private var bluetoothSocket: BluetoothSocket? = null
     var currentAccelerometer = Accelerometer(0, 0, 0, 0, 0)
     private var prevAccelerometer = Accelerometer(0, 0, 0, 0, 0)
-    var isCough = AtomicBoolean(false)
     var device: BluetoothDevice? = null
-    lateinit var onAccelerometryUpdate: (amplitudes: Short) -> Unit
+    lateinit var onAccelerometerUpdate: (amplitudes: Short) -> Unit
 
-    init {
-
+    override fun run() {
+        if (!isStopped) {
+            readingLoop()
+        }
     }
 
     private fun connectToDevice() {
-        for (device in bluetoothAdapter.bondedDevices!!) {
-            if (device.name == "HC-COUGH") {
-                this.device = device
-            }
-        }
         if (device !== null) {
             val id: UUID = device?.uuids?.get(0)!!.uuid
             bluetoothSocket = device!!.createRfcommSocketToServiceRecord(id)
-            bluetoothSocket?.connect()
+            try {
+                bluetoothSocket?.connect()
+            } catch (e: Exception) {
+                isConnected = false
+                connectToDevice()
+            }
         }
     }
 
@@ -51,12 +52,6 @@ class AccelerometerThread : Thread() {
         return stringBuilder.toString()
     }
 
-    override fun run() {
-        if (!isStopped) {
-            readingLoop()
-        }
-    }
-
     override fun interrupt() {
         super.interrupt()
         isStopped = true
@@ -66,6 +61,7 @@ class AccelerometerThread : Thread() {
 
     private fun readingLoop() {
         connectToDevice()
+        isConnected = true
         if (bluetoothSocket == null) {
             return
         }
@@ -74,24 +70,8 @@ class AccelerometerThread : Thread() {
         try {
             while (device !== null) {
                 string = inputStream.readUpToChar('\r')
-                if (string.endsWith("=") || !string.contains("Xa=")
-                    || !string.contains("Ya=") || !string.contains("X=")
-                    || !string.contains("Y=") || !string.contains("ADC=")
-                ) {
-                    sleep(5)
-                    continue
-                }
-                val builder = java.lang.StringBuilder()
-                builder.append('{')
-                string = string.trim(' ', '\"', '\n', '\r')
-                string.replace("=".toRegex(), " : ").also { string = it }
-                string.replace("\t".toRegex(), ",").also { string = it }
-                builder.append(string)
-                builder.append('}')
-
-                val gson = GsonBuilder().setPrettyPrinting().create()
-                currentAccelerometer =
-                    gson.fromJson(builder.toString(), Accelerometer::class.java)
+                if (checkAccelerometerString(string)) continue
+                buildAccelerometer(string)
                 Log.e("ACCELEROMETER", currentAccelerometer.toString())
                 /*if ((abs(prevAccelerometer.Xa - currentAccelerometer.Xa) > 1000 ||
                             abs(prevAccelerometer.Ya - currentAccelerometer.Ya) > 1000) && abs(
@@ -102,15 +82,41 @@ class AccelerometerThread : Thread() {
                 } else {
                     this.isCough.set(false)
                 }*/
-                onAccelerometryUpdate(currentAccelerometer.ADC.toShort())
+                onAccelerometerUpdate(currentAccelerometer.ADC.toShort())
                 this.prevAccelerometer = currentAccelerometer
                 sleep(1)
             }
         } catch (e: Exception) {
             println(string)
+            isConnected = false
             if (!isStopped) {
                 readingLoop()
             }
         }
+    }
+
+    private fun buildAccelerometer(string: String) {
+        val builder = java.lang.StringBuilder()
+        builder.append('{')
+        var modString = string.trim(' ', '\"', '\n', '\r')
+        modString.replace("=".toRegex(), " : ").also { modString = it }
+        modString.replace("\t".toRegex(), ",").also { modString = it }
+        builder.append(modString)
+        builder.append('}')
+
+        val gson = GsonBuilder().setPrettyPrinting().create()
+        currentAccelerometer =
+            gson.fromJson(builder.toString(), Accelerometer::class.java)
+    }
+
+    private fun checkAccelerometerString(string: String): Boolean {
+        if (string.endsWith("=") || !string.contains("Xa=")
+            || !string.contains("Ya=") || !string.contains("X=")
+            || !string.contains("Y=") || !string.contains("ADC=")
+        ) {
+            sleep(5)
+            return true
+        }
+        return false
     }
 }

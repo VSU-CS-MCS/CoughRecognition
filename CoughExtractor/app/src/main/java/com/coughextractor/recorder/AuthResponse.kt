@@ -12,9 +12,9 @@ data class ExaminationsResponse(
 )
 
 data class Examination(
-    val examination_name: String,
-    val files: List<String>,
-    val id: Int,
-    val patient_key: Int,
-    val patient_surname: String
+    val examination_name: String = "",
+    val files: List<String> = listOf(),
+    val id: Int = -1,
+    val patient_key: Int = -1,
+    val patient_surname: String = ""
 )

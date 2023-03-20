@@ -17,7 +17,6 @@ import android.widget.Spinner
 import androidx.appcompat.app.AppCompatActivity
 import androidx.databinding.DataBindingUtil
 import androidx.lifecycle.ViewModelProviders
-import androidx.lifecycle.lifecycleScope
 import com.coughextractor.databinding.ActivityMainBinding
 import com.coughextractor.recorder.AmplitudeCoughRecorder
 import com.coughextractor.recorder.Examination
@@ -32,13 +31,13 @@ import com.google.common.net.HttpHeaders.USER_AGENT
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.timer
-
-
-private const val TAG = "MainActivity"
 
 private const val REQUEST_PERMISSION_CODE = 200
 
@@ -46,157 +45,36 @@ private const val REQUEST_PERMISSION_CODE = 200
 class MainActivity : AppCompatActivity() {
     private var serviceConnection: ServiceConnection? = null
 
-
     var examinations: List<Examination> = listOf()
     var userId: Int = -1
     var examinationNames: MutableList<String> = mutableListOf()
+
     override fun onCreate(savedInstanceState: Bundle?) {
+
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
         val service = Intent(this, AmplitudeCoughRecorder::class.java)
+
         serviceConnection = object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName, service: IBinder) {
                 val binder = service as MyBinder
                 val viewModel =
                     ViewModelProviders.of(this@MainActivity).get(MainViewModel::class.java)
+                viewModel.bindService(service)
                 val extras = intent.extras
                 if (extras != null) {
                     val token = extras.getString("token").toString()
                     viewModel.token = token
                     userId = extras.getInt("userId", -1)
-                    val ref = this@MainActivity
 
                     requestPermissions(permissions, REQUEST_PERMISSION_CODE)
-                    this@MainActivity.runOnUiThread {
-                        val binding: ActivityMainBinding =
-                            DataBindingUtil.setContentView(
-                                this@MainActivity,
-                                R.layout.activity_main
-                            )
-                        binding.viewModel = viewModel
-                        binding.lifecycleOwner = this@MainActivity
-                        val audioChart = findViewById<View>(R.id.chart) as LineChart
 
-                        val amplitudesEntries: MutableList<Entry> =
-                            ArrayList(viewModel.amplitudesLength)
-                        val amplitudesDataSet =
-                            LineDataSet(
-                                amplitudesEntries,
-                                getString(R.string.chart_amplitude_label)
-                            )
-                        amplitudesDataSet.setDrawCircles(false)
-                        amplitudesDataSet.color = ColorTemplate.VORDIPLOM_COLORS[0]
-
-                        val amplitudeThresholdEntries: MutableList<Entry> =
-                            ArrayList(viewModel.amplitudesLength)
-                        val amplitudeThresholdDataSet =
-                            LineDataSet(
-                                amplitudeThresholdEntries,
-                                getString(R.string.amplitude_label)
-                            )
-                        amplitudeThresholdDataSet.setDrawCircles(false)
-                        amplitudeThresholdDataSet.color = ColorTemplate.VORDIPLOM_COLORS[1]
-
-                        val amplitudesDataSetLineData =
-                            LineData(amplitudesDataSet, amplitudeThresholdDataSet)
-                        audioChart.data = amplitudesDataSetLineData
-
-                        val accelerometerChart =
-                            findViewById<View>(R.id.accelerometerChart) as LineChart
-                        val accelerometerEntries: MutableList<Entry> =
-                            ArrayList(viewModel.amplitudesLength)
-                        val accelerometerDataSet =
-                            LineDataSet(
-                                accelerometerEntries,
-                                getString(R.string.chart_amplitude_label)
-                            )
-                        accelerometerDataSet.setDrawCircles(false)
-                        accelerometerDataSet.color = ColorTemplate.VORDIPLOM_COLORS[0]
-
-                        val accelerometerThresholdEntries: MutableList<Entry> =
-                            ArrayList(viewModel.amplitudesLength)
-                        val accelerometerThresholdDataSet =
-                            LineDataSet(
-                                accelerometerThresholdEntries,
-                                getString(R.string.amplitude_label)
-                            )
-                        accelerometerThresholdDataSet.setDrawCircles(false)
-                        accelerometerThresholdDataSet.color = ColorTemplate.VORDIPLOM_COLORS[1]
-
-                        val accelerometerDataSetLineData =
-                            LineData(accelerometerDataSet, accelerometerThresholdDataSet)
-                        accelerometerChart.data = accelerometerDataSetLineData
-                        viewModel.soundAmplitudeObservable.observe(this@MainActivity) {
-                            amplitudeThresholdDataSet.clear()
-                            amplitudeThresholdDataSet.addEntry(
-                                Entry(
-                                    viewModel.amplitudesLength.toFloat(),
-                                    0.0f
-                                )
-                            )
-
-                            amplitudeThresholdDataSet.notifyDataSetChanged()
-                            amplitudesDataSetLineData.notifyDataChanged()
-                            audioChart.notifyDataSetChanged()
-                            audioChart.invalidate()
-                        }
-
-                        viewModel.accelerometerAmplitudeObservable.observe(this@MainActivity) {
-                            accelerometerThresholdDataSet.clear()
-                            accelerometerThresholdDataSet.addEntry(
-                                Entry(
-                                    viewModel.amplitudesLength.toFloat(),
-                                    0.0f
-                                )
-                            )
-
-                            accelerometerThresholdDataSet.notifyDataSetChanged()
-                            accelerometerDataSetLineData.notifyDataChanged()
-                            accelerometerChart.notifyDataSetChanged()
-                            accelerometerChart.invalidate()
-                        }
-
-                        timer("Chart Updater", period = 1000 / 24) {
-                            runOnUiThread {
-                                synchronized(viewModel.amplitudesLock) {
-                                    val amplitudes = viewModel.amplitudes.value!!
-                                    amplitudesDataSet.clear()
-                                    for (amplitude in amplitudes.withIndex()) {
-                                        amplitudesDataSet.addEntry(
-                                            Entry(
-                                                amplitude.index.toFloat(), amplitude.value
-                                            )
-                                        )
-                                    }
-
-                                    amplitudesDataSet.notifyDataSetChanged()
-                                    amplitudesDataSetLineData.notifyDataChanged()
-                                    audioChart.notifyDataSetChanged()
-                                    audioChart.invalidate()
-                                }
-                                synchronized(viewModel.accLock) {
-                                    val accelerometry = viewModel.accelerometry.value!!
-                                    accelerometerDataSet.clear()
-                                    for (accelerometr in accelerometry.withIndex()) {
-                                        accelerometerDataSet.addEntry(
-                                            Entry(
-                                                accelerometr.index.toFloat(),
-                                                accelerometr.value
-                                            )
-                                        )
-                                    }
-
-                                    accelerometerDataSet.notifyDataSetChanged()
-                                    accelerometerDataSetLineData.notifyDataChanged()
-                                    accelerometerChart.notifyDataSetChanged()
-                                    accelerometerChart.invalidate()
-                                }
-                            }
-                        }
+                    runOnUiThread {
+                        runUi(viewModel)
                     }
                     viewModel.baseDir = externalCacheDir?.absolutePath ?: ""
 
+                    val ref = this@MainActivity
                     GlobalScope.launch(Dispatchers.IO) {
                         val url = URL("http://88.83.201.153/api/examinations/")
                         val httpURLConnection = url.openConnection() as HttpURLConnection
@@ -221,56 +99,7 @@ class MainActivity : AppCompatActivity() {
                                 examinations = examinationsResponse.examinations
 
                                 if (examinationNames.isNotEmpty()) {
-                                    val staticSpinner =
-                                        findViewById<View>(R.id.examinations) as Spinner
-
-                                    val staticAdapter = ArrayAdapter(
-                                        ref,
-                                        R.layout.support_simple_spinner_dropdown_item,
-                                        examinationNames
-                                    )
-                                    staticAdapter.setDropDownViewResource(R.layout.support_simple_spinner_dropdown_item)
-
-                                    staticSpinner.adapter = staticAdapter
-                                    viewModel.examination = examinations.first()
-                                    val sp =
-                                        getSharedPreferences("selectedExamination", MODE_PRIVATE)
-                                    val selectedExaminationName = sp.getString("examination", null)
-                                    val index =
-                                        examinationNames.indexOf(selectedExaminationName)
-                                    if (index >= 0) {
-                                        staticSpinner.setSelection(index)
-                                        viewModel.examination =
-                                            examinations.first { it.examination_name === staticSpinner.getItemAtPosition(index) }
-                                    }
-
-                                    staticSpinner.onItemSelectedListener =
-                                        object : OnItemSelectedListener {
-                                            override fun onItemSelected(
-                                                parent: AdapterView<*>, view: View,
-                                                position: Int, id: Long
-                                            ) {
-                                                val selectedExamination = examinations.first {
-                                                    it.examination_name === parent.getItemAtPosition(
-                                                        position
-                                                    )
-                                                }
-                                                viewModel.examination =
-                                                    selectedExamination
-
-                                                val editor = sp.edit()
-                                                editor.putString(
-                                                    "examination",
-                                                    selectedExamination.examination_name
-                                                )
-                                                editor.apply()
-                                                viewModel.bindService(binder)
-                                            }
-
-                                            override fun onNothingSelected(parent: AdapterView<*>?) {
-                                                // TODO Auto-generated method stub
-                                            }
-                                        }
+                                    configureExaminationSelector(ref, viewModel, binder)
                                 }
                             }
                         } else {
@@ -288,6 +117,199 @@ class MainActivity : AppCompatActivity() {
             }
         }
         bindService(service, serviceConnection!!, Context.BIND_AUTO_CREATE)
+    }
+
+    private fun configureExaminationSelector(
+        ref: MainActivity,
+        viewModel: MainViewModel,
+        binder: MyBinder
+    ) {
+        val staticSpinner =
+            findViewById<View>(R.id.examinations) as Spinner
+
+        val staticAdapter = ArrayAdapter(
+            ref,
+            R.layout.support_simple_spinner_dropdown_item,
+            examinationNames
+        )
+        staticAdapter.setDropDownViewResource(R.layout.support_simple_spinner_dropdown_item)
+
+        staticSpinner.adapter = staticAdapter
+        viewModel.examination = examinations.first()
+        val sp =
+            getSharedPreferences("selectedExamination", MODE_PRIVATE)
+        val selectedExaminationName = sp.getString("examination", null)
+        val index =
+            examinationNames.indexOf(selectedExaminationName)
+        if (index >= 0) {
+            staticSpinner.setSelection(index)
+            viewModel.examination =
+                examinations.first { it.examination_name === staticSpinner.getItemAtPosition(index) }
+        }
+
+        staticSpinner.onItemSelectedListener =
+            object : OnItemSelectedListener {
+                override fun onItemSelected(
+                    parent: AdapterView<*>, view: View,
+                    position: Int, id: Long
+                ) {
+                    val selectedExamination = examinations.first {
+                        it.examination_name === parent.getItemAtPosition(
+                            position
+                        )
+                    }
+                    viewModel.examination =
+                        selectedExamination
+
+                    val editor = sp.edit()
+                    editor.putString(
+                        "examination",
+                        selectedExamination.examination_name
+                    )
+                    editor.apply()
+                    viewModel.bindService(binder)
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) {
+                    // TODO Auto-generated method stub
+                }
+            }
+    }
+
+    private fun runUi(viewModel: MainViewModel) {
+        val binding: ActivityMainBinding =
+            DataBindingUtil.setContentView(
+                this@MainActivity,
+                R.layout.activity_main
+            )
+        binding.viewModel = viewModel
+        binding.lifecycleOwner = this@MainActivity
+        val audioChart = findViewById<View>(R.id.chart) as LineChart
+
+        val amplitudesEntries: MutableList<Entry> =
+            ArrayList(viewModel.amplitudesLength)
+        val amplitudesDataSet =
+            LineDataSet(
+                amplitudesEntries,
+                getString(R.string.chart_amplitude_label)
+            )
+        amplitudesDataSet.setDrawCircles(false)
+        amplitudesDataSet.lineWidth = 2.0f
+        amplitudesDataSet.color = ColorTemplate.MATERIAL_COLORS[0]
+
+        val amplitudeThresholdEntries: MutableList<Entry> =
+            ArrayList(viewModel.amplitudesLength)
+        val amplitudeThresholdDataSet =
+            LineDataSet(
+                amplitudeThresholdEntries,
+                getString(R.string.amplitude_label)
+            )
+        amplitudeThresholdDataSet.setDrawCircles(false)
+        amplitudeThresholdDataSet.lineWidth = 2.0f
+        amplitudeThresholdDataSet.color = ColorTemplate.MATERIAL_COLORS[2]
+
+        val amplitudesDataSetLineData =
+            LineData(amplitudesDataSet, amplitudeThresholdDataSet)
+        audioChart.data = amplitudesDataSetLineData
+
+        val accelerometerChart =
+            findViewById<View>(R.id.accelerometerChart) as LineChart
+        val accelerometerEntries: MutableList<Entry> =
+            ArrayList(viewModel.amplitudesLength)
+        val accelerometerDataSet =
+            LineDataSet(
+                accelerometerEntries,
+                getString(R.string.chart_amplitude_label)
+            )
+        accelerometerDataSet.setDrawCircles(false)
+        accelerometerDataSet.lineWidth = 2.0f
+        accelerometerDataSet.color = ColorTemplate.MATERIAL_COLORS[0]
+
+        val accelerometerThresholdEntries: MutableList<Entry> =
+            ArrayList(viewModel.amplitudesLength)
+        val accelerometerThresholdDataSet =
+            LineDataSet(
+                accelerometerThresholdEntries,
+                getString(R.string.accelerometer_label)
+            )
+        accelerometerThresholdDataSet.setDrawCircles(false)
+        accelerometerThresholdDataSet.lineWidth = 2.0f
+        accelerometerThresholdDataSet.color = ColorTemplate.MATERIAL_COLORS[2]
+
+        val accelerometerDataSetLineData =
+            LineData(accelerometerDataSet, accelerometerThresholdDataSet)
+        accelerometerChart.data = accelerometerDataSetLineData
+        viewModel.soundAmplitudeObservable.observe(this@MainActivity) { value ->
+            amplitudeThresholdDataSet.clear()
+            if (value != null) {
+                amplitudeThresholdDataSet.addEntry(
+                    Entry(0.0f, value.toFloat())
+                )
+                amplitudeThresholdDataSet.addEntry(
+                    Entry(viewModel.amplitudesLength.toFloat(), value.toFloat())
+                )
+            }
+            amplitudeThresholdDataSet.notifyDataSetChanged()
+            amplitudesDataSetLineData.notifyDataChanged()
+            audioChart.notifyDataSetChanged()
+            audioChart.invalidate()
+        }
+
+        viewModel.accelerometerAmplitudeObservable.observe(this@MainActivity) { value ->
+            accelerometerThresholdDataSet.clear()
+            if (value != null) {
+                accelerometerThresholdDataSet.addEntry(
+                    Entry(0.0f, value.toFloat())
+                )
+                accelerometerThresholdDataSet.addEntry(
+                    Entry(viewModel.amplitudesLength.toFloat(), value.toFloat())
+                )
+            }
+
+            accelerometerThresholdDataSet.notifyDataSetChanged()
+            accelerometerDataSetLineData.notifyDataChanged()
+            accelerometerChart.notifyDataSetChanged()
+            accelerometerChart.invalidate()
+        }
+
+        timer("Chart Updater", period = 1000 / 24) {
+            runOnUiThread {
+                synchronized(viewModel.amplitudesLock) {
+                    val amplitudes = viewModel.amplitudes.value!!
+                    amplitudesDataSet.clear()
+                    for (amplitude in amplitudes.withIndex()) {
+                        amplitudesDataSet.addEntry(
+                            Entry(
+                                /* x = */ amplitude.index.toFloat(),
+                                /* y = */ amplitude.value
+                            )
+                        )
+                    }
+
+                    amplitudesDataSet.notifyDataSetChanged()
+                    amplitudesDataSetLineData.notifyDataChanged()
+                    audioChart.notifyDataSetChanged()
+                    audioChart.invalidate()
+                }
+                synchronized(viewModel.accelerometerLock) {
+                    val accelerometry = viewModel.accelerometry.value!!
+                    accelerometerDataSet.clear()
+                    for (accelerometr in accelerometry.withIndex()) {
+                        accelerometerDataSet.addEntry(
+                            Entry(
+                                /* x = */ accelerometr.index.toFloat(),
+                                /* y = */ accelerometr.value
+                            )
+                        )
+                    }
+
+                    accelerometerDataSet.notifyDataSetChanged()
+                    accelerometerDataSetLineData.notifyDataChanged()
+                    accelerometerChart.notifyDataSetChanged()
+                    accelerometerChart.invalidate()
+                }
+            }
+        }
     }
 
     private var permissionToRecordAccepted = false

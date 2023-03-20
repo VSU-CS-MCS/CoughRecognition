@@ -2,17 +2,16 @@ package com.coughextractor
 
 import android.app.Application
 import android.content.Intent
+import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.ViewModelInject
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
 import com.coughextractor.recorder.AmplitudeCoughRecorder
 import com.coughextractor.recorder.Examination
 import com.coughextractor.recorder.MyBinder
 import kotlin.math.roundToInt
-
-private const val TAG = "MainViewModel"
 
 class MainViewModel @ViewModelInject constructor(
     application: Application,
@@ -23,6 +22,7 @@ class MainViewModel @ViewModelInject constructor(
 
     fun bindService(serviceBinder: MyBinder) {
         this.serviceBinder = serviceBinder
+
         serviceBinder.setonAmplitudesUpdate { amplitudes ->
             synchronized(amplitudesLock) {
                 val prevValue = this@MainViewModel.amplitudes.value!!
@@ -41,8 +41,8 @@ class MainViewModel @ViewModelInject constructor(
             }
         }
 
-        serviceBinder.setonAccelerometryUpdate { accelerometry ->
-            synchronized(accLock) {
+        serviceBinder.setonAccelerometryUpdate { accelerometer ->
+            synchronized(accelerometerLock) {
                 val prevValue = this@MainViewModel.accelerometry.value!!
                 val indices = 0 until coughRecorder.audioBufferSize step amplitudesStep
 
@@ -53,7 +53,7 @@ class MainViewModel @ViewModelInject constructor(
                 }
 
                 for (index in indices) {
-                    prevValue.add(accelerometry.toFloat())
+                    prevValue.add(accelerometer.toFloat())
                 }
                 this@MainViewModel.accelerometry.postValue(prevValue)
             }
@@ -68,76 +68,44 @@ class MainViewModel @ViewModelInject constructor(
         serviceBinder = null
     }
 
-    private fun init() {
-        coughRecorder.onAmplitudesUpdate = { amplitudes ->
-            synchronized(amplitudesLock) {
-                val prevValue = this@MainViewModel.amplitudes.value!!
-                val indices = 0 until coughRecorder.audioBufferSize step amplitudesStep
-
-                if (prevValue.count() >= amplitudesLength) {
-                    for (index in indices) {
-                        prevValue.removeAt(0)
-                    }
-                }
-
-                for (index in indices) {
-                    prevValue.add(amplitudes[index].toFloat())
-                }
-                this@MainViewModel.amplitudes.postValue(prevValue)
-            }
-        }
-        coughRecorder.soundAmplitudeThreshold = 2000
-
-        coughRecorder.onAccelerometryUpdate = { accelerometry ->
-            synchronized(accLock) {
-                val prevValue = this@MainViewModel.accelerometry.value!!
-                val indices = 0 until coughRecorder.audioBufferSize step amplitudesStep
-
-                if (prevValue.count() >= amplitudesLength) {
-                    for (index in indices) {
-                        prevValue.removeAt(0)
-                    }
-                }
-
-                for (index in indices) {
-                    prevValue.add(accelerometry.toFloat())
-                }
-                this@MainViewModel.accelerometry.postValue(prevValue)
-            }
-        }
-        coughRecorder.accelerometerAmplitudeThreshold = 500
-    }
-
     var baseDir: String = ""
     var token: String = ""
-    lateinit var examination: Examination
+    var examination: Examination = Examination()
 
     var soundAmplitude: String
         get() {
-            return coughRecorder.soundAmplitudeThreshold.toString()
+            return serviceBinder?.getSoundAmplitudeThreshold().toString()
         }
         set(value) {
-            coughRecorder.soundAmplitudeThreshold = value.toIntOrNull()
-            soundAmplitudeObservable.postValue(coughRecorder.soundAmplitudeThreshold)
+            var v = value.toIntOrNull()
+            if (v == null) {
+                v = 0
+            }
+            serviceBinder?.setSoundAmplitudeThreshold(v)
+            soundAmplitudeObservable.postValue(v)
         }
 
     var accelerometerAmplitude: String
         get() {
-            return coughRecorder.accelerometerAmplitudeThreshold.toString()
+            return serviceBinder?.getAccelerometerAmplitudeThreshold().toString()
         }
         set(value) {
-            coughRecorder.accelerometerAmplitudeThreshold = value.toIntOrNull()
-            accelerometerAmplitudeObservable.postValue(coughRecorder.accelerometerAmplitudeThreshold)
+            var v = value.toIntOrNull()
+            if (v == null) {
+                v = 0
+            }
+            serviceBinder?.setAccelerometerAmplitudeThreshold(v)
+            accelerometerAmplitudeObservable.postValue(v)
         }
     val soundAmplitudeObservable: MutableLiveData<Int?> by lazy {
-        MutableLiveData<Int?>(coughRecorder.soundAmplitudeThreshold)
+        MutableLiveData<Int?>(soundAmplitude.toInt())
     }
     val accelerometerAmplitudeObservable: MutableLiveData<Int?> by lazy {
-        MutableLiveData<Int?>(coughRecorder.accelerometerAmplitudeThreshold)
+        MutableLiveData<Int?>(accelerometerAmplitude.toInt())
     }
 
     val amplitudesLock = Object()
-    val accLock = Object()
+    val accelerometerLock = Object()
     private val amplitudesTimeLengthSec = 6
     private val amplitudesStep = 150
     private val amplitudesPerRead =
@@ -158,22 +126,26 @@ class MainViewModel @ViewModelInject constructor(
         MutableLiveData<Boolean>(false)
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        coughRecorder.stopForeground(true)
+    fun profileClick() {
+        val context =  getApplication<Application>().applicationContext
+        val intent = Intent(context, LoginActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        context.startActivity(intent)
     }
 
     fun powerClick() {
-        if (!coughRecorder.isRecording) {
+        if (isRecording.value == false) {
+            isRecording.postValue(true)
             amplitudes.postValue(ArrayList())
             accelerometry.postValue(ArrayList())
             val intent = Intent(getApplication(), AmplitudeCoughRecorder::class.java)
             ContextCompat.startForegroundService(getApplication(), intent)
 
         } else {
-            coughRecorder.stopRecording()
+            isRecording.postValue(false)
+            serviceBinder?.getService()?.stopForeground(true)
+            serviceBinder?.getService()?.onDestroy()
         }
-        isRecording.postValue(coughRecorder.isRecording)
     }
 
 }
