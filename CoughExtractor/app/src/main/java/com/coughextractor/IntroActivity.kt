@@ -70,7 +70,8 @@ class IntroActivity : AppCompatActivity() {
         val jsonObjectString = jsonObject.toString()
 
         GlobalScope.launch(Dispatchers.IO) {
-            val url = URL("http://88.83.201.153/api-token-auth/")
+            val host = getSharedPreferences("Host", MODE_PRIVATE).getString("Host", null)
+            val url = URL("http://${host}/api-token-auth/")
             val httpURLConnection = url.openConnection() as HttpURLConnection
             httpURLConnection.requestMethod = "POST"
             httpURLConnection.setRequestProperty(

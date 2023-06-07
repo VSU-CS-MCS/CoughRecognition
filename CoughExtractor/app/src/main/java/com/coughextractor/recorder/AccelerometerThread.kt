@@ -7,9 +7,11 @@ import android.util.Log
 import com.coughextractor.Accelerometer
 import com.google.gson.GsonBuilder
 import java.io.InputStream
-import java.util.*
+import java.util.UUID
+import kotlin.math.abs
 
 class AccelerometerThread : Thread() {
+    var isCough: Boolean = false
     var isConnected: Boolean = false
     lateinit var bluetoothAdapter: BluetoothAdapter
     private var isStopped = false
@@ -18,6 +20,9 @@ class AccelerometerThread : Thread() {
     private var prevAccelerometer = Accelerometer(0, 0, 0, 0, 0)
     var device: BluetoothDevice? = null
     lateinit var onAccelerometerUpdate: (amplitudes: Short) -> Unit
+    lateinit var onAccelerometerXUpdate: (amplitudes: Short) -> Unit
+    lateinit var onAccelerometerYUpdate: (amplitudes: Short) -> Unit
+    private val coughDeviceId = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
     override fun run() {
         if (!isStopped) {
@@ -26,10 +31,9 @@ class AccelerometerThread : Thread() {
     }
 
     private fun connectToDevice() {
-        if (device !== null) {
-            val id: UUID = device?.uuids?.get(0)!!.uuid
-            bluetoothSocket = device!!.createRfcommSocketToServiceRecord(id)
+        if (device?.uuids !== null) {
             try {
+                bluetoothSocket = device!!.createRfcommSocketToServiceRecord(coughDeviceId)
                 bluetoothSocket?.connect()
             } catch (e: Exception) {
                 isConnected = false
@@ -73,16 +77,18 @@ class AccelerometerThread : Thread() {
                 if (checkAccelerometerString(string)) continue
                 buildAccelerometer(string)
                 Log.e("ACCELEROMETER", currentAccelerometer.toString())
-                /*if ((abs(prevAccelerometer.Xa - currentAccelerometer.Xa) > 1000 ||
-                            abs(prevAccelerometer.Ya - currentAccelerometer.Ya) > 1000) && abs(
-                        prevAccelerometer.ADC - currentAccelerometer.ADC
-                    ) > 100
-                ) {
-                    this.isCough.set(true)
-                } else {
-                    this.isCough.set(false)
-                }*/
+                val x = abs(percent(abs(prevAccelerometer.Xa), abs(currentAccelerometer.Xa)))
+                val y = abs(percent(abs(prevAccelerometer.Ya), abs(currentAccelerometer.Ya)))
+                val adc =
+                    abs(percent(abs(prevAccelerometer.ADC), abs(currentAccelerometer.ADC)))
+                Log.e("X", x.toString())
+                Log.e("Y", y.toString())
+                Log.e("ADC", adc.toString())
+
+                this.isCough = (x >= 35 || y >= 35) && adc >= 35
                 onAccelerometerUpdate(currentAccelerometer.ADC.toShort())
+                onAccelerometerXUpdate(currentAccelerometer.Xa.toShort())
+                onAccelerometerYUpdate(currentAccelerometer.Ya.toShort())
                 this.prevAccelerometer = currentAccelerometer
                 sleep(1)
             }
@@ -93,6 +99,13 @@ class AccelerometerThread : Thread() {
                 readingLoop()
             }
         }
+    }
+
+    private fun percent(a: Int, b: Int): Int {
+        if (a != 0 && b != 0) {
+            return ((b - a) * 100 / a)
+        }
+        return 0;
     }
 
     private fun buildAccelerometer(string: String) {

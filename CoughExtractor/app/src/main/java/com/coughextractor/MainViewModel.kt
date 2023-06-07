@@ -59,6 +59,42 @@ class MainViewModel @ViewModelInject constructor(
             }
         }
 
+        serviceBinder.setonAccelerometryXUpdate { accelerometer ->
+            synchronized(accelerometerLock) {
+                val prevValue = this@MainViewModel.accelerometryX.value!!
+                val indices = 0 until coughRecorder.audioBufferSize step amplitudesStep
+
+                if (prevValue.count() >= amplitudesLength) {
+                    for (index in indices) {
+                        prevValue.removeAt(0)
+                    }
+                }
+
+                for (index in indices) {
+                    prevValue.add(accelerometer.toFloat())
+                }
+                this@MainViewModel.accelerometryX.postValue(prevValue)
+            }
+        }
+
+        serviceBinder.setonAccelerometryYUpdate { accelerometer ->
+            synchronized(accelerometerLock) {
+                val prevValue = this@MainViewModel.accelerometryY.value!!
+                val indices = 0 until coughRecorder.audioBufferSize step amplitudesStep
+
+                if (prevValue.count() >= amplitudesLength) {
+                    for (index in indices) {
+                        prevValue.removeAt(0)
+                    }
+                }
+
+                for (index in indices) {
+                    prevValue.add(accelerometer.toFloat())
+                }
+                this@MainViewModel.accelerometryY.postValue(prevValue)
+            }
+        }
+
         serviceBinder.setBaseDir(baseDir)
         serviceBinder.setToken(token)
         serviceBinder.setExamination(examination)
@@ -85,23 +121,8 @@ class MainViewModel @ViewModelInject constructor(
             soundAmplitudeObservable.postValue(v)
         }
 
-    var accelerometerAmplitude: String
-        get() {
-            return serviceBinder?.getAccelerometerAmplitudeThreshold().toString()
-        }
-        set(value) {
-            var v = value.toIntOrNull()
-            if (v == null) {
-                v = 0
-            }
-            serviceBinder?.setAccelerometerAmplitudeThreshold(v)
-            accelerometerAmplitudeObservable.postValue(v)
-        }
     val soundAmplitudeObservable: MutableLiveData<Int?> by lazy {
         MutableLiveData<Int?>(soundAmplitude.toInt())
-    }
-    val accelerometerAmplitudeObservable: MutableLiveData<Int?> by lazy {
-        MutableLiveData<Int?>(accelerometerAmplitude.toInt())
     }
 
     val amplitudesLock = Object()
@@ -122,12 +143,20 @@ class MainViewModel @ViewModelInject constructor(
         MutableLiveData<ArrayList<Float>>(ArrayList(amplitudesLength))
     }
 
+    val accelerometryX: MutableLiveData<ArrayList<Float>> by lazy {
+        MutableLiveData<ArrayList<Float>>(ArrayList(amplitudesLength))
+    }
+
+    val accelerometryY: MutableLiveData<ArrayList<Float>> by lazy {
+        MutableLiveData<ArrayList<Float>>(ArrayList(amplitudesLength))
+    }
+
     val isRecording: MutableLiveData<Boolean> by lazy {
         MutableLiveData<Boolean>(false)
     }
 
     fun profileClick() {
-        val context =  getApplication<Application>().applicationContext
+        val context = getApplication<Application>().applicationContext
         val intent = Intent(context, LoginActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         context.startActivity(intent)

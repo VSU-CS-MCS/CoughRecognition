@@ -76,7 +76,8 @@ class MainActivity : AppCompatActivity() {
 
                     val ref = this@MainActivity
                     GlobalScope.launch(Dispatchers.IO) {
-                        val url = URL("http://88.83.201.153/api/examinations/")
+                        val host = getSharedPreferences("Host", MODE_PRIVATE).getString("Host", null)
+                        val url = URL("http://$host/api/examinations/")
                         val httpURLConnection = url.openConnection() as HttpURLConnection
                         httpURLConnection.requestMethod = "GET"
                         httpURLConnection.setRequestProperty("User-Agent", USER_AGENT)
@@ -219,26 +220,53 @@ class MainActivity : AppCompatActivity() {
         val accelerometerDataSet =
             LineDataSet(
                 accelerometerEntries,
-                getString(R.string.chart_amplitude_label)
+                getString(R.string.chart_accelerometer_label)
             )
         accelerometerDataSet.setDrawCircles(false)
         accelerometerDataSet.lineWidth = 2.0f
         accelerometerDataSet.color = ColorTemplate.MATERIAL_COLORS[0]
-
-        val accelerometerThresholdEntries: MutableList<Entry> =
-            ArrayList(viewModel.amplitudesLength)
-        val accelerometerThresholdDataSet =
-            LineDataSet(
-                accelerometerThresholdEntries,
-                getString(R.string.accelerometer_label)
-            )
-        accelerometerThresholdDataSet.setDrawCircles(false)
-        accelerometerThresholdDataSet.lineWidth = 2.0f
-        accelerometerThresholdDataSet.color = ColorTemplate.MATERIAL_COLORS[2]
+        accelerometerDataSet.addEntry(Entry(0.0f, 0.0f))
 
         val accelerometerDataSetLineData =
-            LineData(accelerometerDataSet, accelerometerThresholdDataSet)
+            LineData(accelerometerDataSet)
         accelerometerChart.data = accelerometerDataSetLineData
+
+        val accelerometerXChart =
+            findViewById<View>(R.id.accelerometerXChart) as LineChart
+        val accelerometerXEntries: MutableList<Entry> =
+            ArrayList(viewModel.amplitudesLength)
+        val accelerometerXDataSet =
+            LineDataSet(
+                accelerometerXEntries,
+                getString(R.string.x_chart_accelerometer_label)
+            )
+        accelerometerXDataSet.setDrawCircles(false)
+        accelerometerXDataSet.lineWidth = 2.0f
+        accelerometerXDataSet.color = ColorTemplate.MATERIAL_COLORS[0]
+        accelerometerXDataSet.addEntry(Entry(0.0f, 0.0f))
+
+        val accelerometerXDataSetLineData =
+            LineData(accelerometerXDataSet)
+        accelerometerXChart.data = accelerometerXDataSetLineData
+
+        val accelerometerYChart =
+            findViewById<View>(R.id.accelerometerYChart) as LineChart
+        val accelerometerYEntries: MutableList<Entry> =
+            ArrayList(viewModel.amplitudesLength)
+        val accelerometerYDataSet =
+            LineDataSet(
+                accelerometerYEntries,
+                getString(R.string.y_chart_accelerometer_label)
+            )
+        accelerometerYDataSet.setDrawCircles(false)
+        accelerometerYDataSet.lineWidth = 2.0f
+        accelerometerYDataSet.color = ColorTemplate.MATERIAL_COLORS[0]
+        accelerometerYDataSet.addEntry(Entry(0.0f, 0.0f))
+
+        val accelerometerYDataSetLineData =
+            LineData(accelerometerYDataSet)
+        accelerometerYChart.data = accelerometerYDataSetLineData
+
         viewModel.soundAmplitudeObservable.observe(this@MainActivity) { value ->
             amplitudeThresholdDataSet.clear()
             if (value != null) {
@@ -253,23 +281,6 @@ class MainActivity : AppCompatActivity() {
             amplitudesDataSetLineData.notifyDataChanged()
             audioChart.notifyDataSetChanged()
             audioChart.invalidate()
-        }
-
-        viewModel.accelerometerAmplitudeObservable.observe(this@MainActivity) { value ->
-            accelerometerThresholdDataSet.clear()
-            if (value != null) {
-                accelerometerThresholdDataSet.addEntry(
-                    Entry(0.0f, value.toFloat())
-                )
-                accelerometerThresholdDataSet.addEntry(
-                    Entry(viewModel.amplitudesLength.toFloat(), value.toFloat())
-                )
-            }
-
-            accelerometerThresholdDataSet.notifyDataSetChanged()
-            accelerometerDataSetLineData.notifyDataChanged()
-            accelerometerChart.notifyDataSetChanged()
-            accelerometerChart.invalidate()
         }
 
         timer("Chart Updater", period = 1000 / 24) {
@@ -307,6 +318,42 @@ class MainActivity : AppCompatActivity() {
                     accelerometerDataSetLineData.notifyDataChanged()
                     accelerometerChart.notifyDataSetChanged()
                     accelerometerChart.invalidate()
+                }
+
+                synchronized(viewModel.accelerometerLock) {
+                    val accelerometry = viewModel.accelerometryX.value!!
+                    accelerometerXDataSet.clear()
+                    for (accelerometr in accelerometry.withIndex()) {
+                        accelerometerXDataSet.addEntry(
+                            Entry(
+                                /* x = */ accelerometr.index.toFloat(),
+                                /* y = */ accelerometr.value
+                            )
+                        )
+                    }
+
+                    accelerometerXDataSet.notifyDataSetChanged()
+                    accelerometerXDataSetLineData.notifyDataChanged()
+                    accelerometerXChart.notifyDataSetChanged()
+                    accelerometerXChart.invalidate()
+                }
+
+                synchronized(viewModel.accelerometerLock) {
+                    val accelerometry = viewModel.accelerometryY.value!!
+                    accelerometerYDataSet.clear()
+                    for (accelerometr in accelerometry.withIndex()) {
+                        accelerometerYDataSet.addEntry(
+                            Entry(
+                                /* x = */ accelerometr.index.toFloat(),
+                                /* y = */ accelerometr.value
+                            )
+                        )
+                    }
+
+                    accelerometerYDataSet.notifyDataSetChanged()
+                    accelerometerYDataSetLineData.notifyDataChanged()
+                    accelerometerYChart.notifyDataSetChanged()
+                    accelerometerYChart.invalidate()
                 }
             }
         }

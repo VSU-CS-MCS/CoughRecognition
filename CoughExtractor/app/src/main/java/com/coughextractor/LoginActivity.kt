@@ -23,9 +23,10 @@ import java.net.URL
 
 
 class LoginActivity : AppCompatActivity(), View.OnClickListener {
-    var rememberMeCheckBox: CheckBox? = null
-    var edtEmail: EditText? = null
-    var edtPassword: EditText? = null
+    private var edtHost: EditText? = null
+    private var rememberMeCheckBox: CheckBox? = null
+    private var edtEmail: EditText? = null
+    private var edtPassword: EditText? = null
     private var btnLogin: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +34,9 @@ class LoginActivity : AppCompatActivity(), View.OnClickListener {
         setContentView(R.layout.activity_login)
         edtEmail = findViewById(R.id.editUsername)
         edtPassword = findViewById(R.id.editPassword)
+        edtHost = findViewById(R.id.editHost)
+        val host = getSharedPreferences("Host", MODE_PRIVATE).getString("Host", "")
+        edtHost?.setText(host)
 
         btnLogin = findViewById(R.id.login_btn)
         btnLogin?.setOnClickListener(this)
@@ -49,6 +53,7 @@ class LoginActivity : AppCompatActivity(), View.OnClickListener {
     private fun login() {
         val email = edtEmail!!.text.toString().trim { it <= ' ' }
         val password = edtPassword!!.text.toString().trim { it <= ' ' }
+        val host = edtHost!!.text.toString().trim { it <= ' ' }
         if (email.isEmpty()) {
             edtEmail!!.error = "Email is required"
             edtEmail!!.requestFocus()
@@ -59,12 +64,19 @@ class LoginActivity : AppCompatActivity(), View.OnClickListener {
             edtPassword!!.requestFocus()
             return
         }
+        if (host.isEmpty()) {
+            edtHost!!.error = "Password is required"
+            edtHost!!.requestFocus()
+            return
+        }
         deleteSharedPreferences("Login")
-
-        authorization(email, password)
+        val sp = getSharedPreferences("Host", MODE_PRIVATE).edit()
+        sp.putString("Host", host)
+        sp.apply()
+        authorization(email, password, host)
     }
 
-    private fun authorization(username: String, password: String) {
+    private fun authorization(username: String, password: String, host: String) {
         val jsonObject = JSONObject()
         jsonObject.put("username", username)
         jsonObject.put("password", password)
@@ -73,7 +85,7 @@ class LoginActivity : AppCompatActivity(), View.OnClickListener {
         val jsonObjectString = jsonObject.toString()
 
         GlobalScope.launch(Dispatchers.IO) {
-            val url = URL("http://88.83.201.153/api-token-auth/")
+            val url = URL("http://${host}/api-token-auth/")
             val httpURLConnection = url.openConnection() as HttpURLConnection
             httpURLConnection.requestMethod = "POST"
             httpURLConnection.setRequestProperty(
@@ -104,11 +116,10 @@ class LoginActivity : AppCompatActivity(), View.OnClickListener {
                     val authResponse = gson.fromJson(prettyJson, AuthResponse::class.java)
                     if (!authResponse.token.isNullOrEmpty()) {
                         if (rememberMeCheckBox?.isChecked!!) {
-                            val sp = getSharedPreferences("Login", MODE_PRIVATE)
-                            val Ed = sp.edit()
-                            Ed.putString("Username", username)
-                            Ed.putString("Password", password)
-                            Ed.apply()
+                            val sp = getSharedPreferences("Login", MODE_PRIVATE).edit()
+                            sp.putString("Username", username)
+                            sp.putString("Password", password)
+                            sp.apply()
                         }
 
                         val intent = Intent(this@LoginActivity, MainActivity::class.java)

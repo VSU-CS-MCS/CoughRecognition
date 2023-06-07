@@ -42,13 +42,13 @@ interface MyBinder {
     fun getService(): AmplitudeCoughRecorder
     fun setonAmplitudesUpdate(field: (Array<Short>) -> Unit)
     fun setonAccelerometryUpdate(field: (Short) -> Unit)
+    fun setonAccelerometryXUpdate(field: (Short) -> Unit)
+    fun setonAccelerometryYUpdate(field: (Short) -> Unit)
     fun setBaseDir(field: String)
     fun setExamination(examination: Examination)
     fun setToken(token: String)
     fun setSoundAmplitudeThreshold(threshold: Int)
-    fun setAccelerometerAmplitudeThreshold(threshold: Int)
     fun getSoundAmplitudeThreshold(): Int
-    fun getAccelerometerAmplitudeThreshold(): Int
 }
 
 class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Short> {
@@ -67,6 +67,14 @@ class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Sh
             onAccelerometerUpdate = field
         }
 
+        override fun setonAccelerometryXUpdate(field: (Short) -> Unit) {
+            onAccelerometerXUpdate = field
+        }
+
+        override fun setonAccelerometryYUpdate(field: (Short) -> Unit) {
+            onAccelerometerYUpdate = field
+        }
+
         override fun setBaseDir(field: String) {
             baseDir = field
         }
@@ -83,19 +91,9 @@ class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Sh
             this@AmplitudeCoughRecorder.soundAmplitudeThreshold = threshold
         }
 
-        override fun setAccelerometerAmplitudeThreshold(threshold: Int) {
-            this@AmplitudeCoughRecorder.accelerometerAmplitudeThreshold = threshold
-        }
-
         override fun getSoundAmplitudeThreshold(): Int {
             return this@AmplitudeCoughRecorder.soundAmplitudeThreshold
         }
-
-        override fun getAccelerometerAmplitudeThreshold(): Int {
-            return this@AmplitudeCoughRecorder.accelerometerAmplitudeThreshold
-        }
-
-
     }
 
     override fun onBind(intent: Intent): IBinder {
@@ -109,9 +107,10 @@ class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Sh
     override var fileName: String = ""
     override lateinit var onAmplitudesUpdate: (amplitudes: Array<Short>) -> Unit
     override lateinit var onAccelerometerUpdate: (amplitudes: Short) -> Unit
+    override lateinit var onAccelerometerXUpdate: (amplitudes: Short) -> Unit
+    override lateinit var onAccelerometerYUpdate: (amplitudes: Short) -> Unit
 
-    override var soundAmplitudeThreshold: Int = 2000
-    override var accelerometerAmplitudeThreshold: Int = 500
+    override var soundAmplitudeThreshold: Int = 7000
 
     var sampleRate: Int = 48000
     private var audioRecorder: AudioRecord? = null
@@ -177,15 +176,6 @@ class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Sh
         stopRecording()
     }
 
-    private fun isConnected(device: BluetoothDevice): Boolean {
-        return try {
-            val m: Method = device.javaClass.getMethod("isConnected")
-            m.invoke(device) as Boolean
-        } catch (e: Exception) {
-            throw IllegalStateException(e)
-        }
-    }
-
     private fun startRecording() {
         if (isRecording) {
             return
@@ -227,12 +217,19 @@ class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Sh
         } catch (e: Exception) {
             //
         }
+        synchronized(amplitudesLock) {
 
-        accelerometerThread?.onAccelerometerUpdate = { accelerometer ->
-            synchronized(amplitudesLock) {
+            accelerometerThread?.onAccelerometerUpdate = { accelerometer ->
                 onAccelerometerUpdate(accelerometer)
             }
+            accelerometerThread?.onAccelerometerXUpdate = { accelerometer ->
+                onAccelerometerXUpdate(accelerometer)
+            }
+            accelerometerThread?.onAccelerometerYUpdate = { accelerometer ->
+                onAccelerometerYUpdate(accelerometer)
+            }
         }
+
     }
 
     private fun startAudioRecorder(): Boolean {
@@ -350,7 +347,7 @@ class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Sh
             if (recordEndOffset == null && maxValue != null && maxValue > amplitudeThreshold) {
                 if (accelerometerThread != null && accelerometerThread!!.isConnected) {
                     onAccelerometerUpdate(accelerometerThread!!.currentAccelerometer.ADC.toShort())
-                    if (accelerometerThread!!.currentAccelerometer.ADC > accelerometerAmplitudeThreshold) {
+                    if (accelerometerThread!!.isCough) {
                         getCoughStart()
                         Log.e(TAG, "Cough Registered")
                         Log.e(TAG, accelerometerThread!!.currentAccelerometer.toString())
@@ -567,7 +564,8 @@ class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Sh
         }
 
         private fun sendToServer() {
-            val apiPost = "http://88.83.201.153/api/files/"
+            val host = getSharedPreferences("Host", MODE_PRIVATE).getString("Host", null)
+            val apiPost = "http://$host/api/files/"
 
             val multipart = MultipartUtility(apiPost, token)
             multipart.addFormField("id_examination", examination.id.toString())
