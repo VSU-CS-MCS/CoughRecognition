@@ -4,7 +4,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.Intent
 import android.media.AudioFormat
@@ -18,19 +17,23 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.coughextractor.R
-import kotlinx.coroutines.*
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
-import java.lang.reflect.Method
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.*
+import java.util.Arrays
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
@@ -48,7 +51,9 @@ interface MyBinder {
     fun setExamination(examination: Examination)
     fun setToken(token: String)
     fun setSoundAmplitudeThreshold(threshold: Int)
+    fun setAccelerometerThreshold(threshold: Int)
     fun getSoundAmplitudeThreshold(): Int
+    fun getAccelerometerThreshold(): Int
 }
 
 class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Short> {
@@ -91,8 +96,17 @@ class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Sh
             this@AmplitudeCoughRecorder.soundAmplitudeThreshold = threshold
         }
 
+        override fun setAccelerometerThreshold(threshold: Int) {
+            this@AmplitudeCoughRecorder.accelerometerThread?.threshold = threshold
+            this@AmplitudeCoughRecorder.accelerometerThreshold = threshold
+        }
+
         override fun getSoundAmplitudeThreshold(): Int {
             return this@AmplitudeCoughRecorder.soundAmplitudeThreshold
+        }
+
+        override fun getAccelerometerThreshold(): Int {
+            return this@AmplitudeCoughRecorder.accelerometerThreshold
         }
     }
 
@@ -111,8 +125,9 @@ class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Sh
     override lateinit var onAccelerometerYUpdate: (amplitudes: Short) -> Unit
 
     override var soundAmplitudeThreshold: Int = 7000
+    override var accelerometerThreshold: Int = 35
 
-    var sampleRate: Int = 48000
+    var sampleRate: Int = 44100
     private var audioRecorder: AudioRecord? = null
 
     private var recordingThread: AudioRecordThread? = null
@@ -360,35 +375,18 @@ class AmplitudeCoughRecorder @Inject constructor() : Service(), CoughRecorder<Sh
 
                 // In case recording has just started we store a lesser recording
                 val firstZeroValueIndex = timeNsBuffer.indexOfFirst { it == 0L }
-                val recordAudioSamplesCount: Int
-                val recordAudioBufferSize: Int
 
-                if (firstZeroValueIndex == -1) {
-                    recordAudioSamplesCount = maxRecordReadCalls
-                    recordAudioBufferSize = maxRecordBufferSize
+                val recordAudioBufferSize: Int = if (firstZeroValueIndex == -1) {
+                    maxRecordBufferSize
                 } else {
-                    recordAudioSamplesCount = firstZeroValueIndex
-                    recordAudioBufferSize = firstZeroValueIndex * audioBufferSize
+                    firstZeroValueIndex * audioBufferSize
                 }
 
-                val timeNsInChronologicalOrder = LongArray(recordAudioSamplesCount)
                 val byteBuffer = ByteBuffer.allocateDirect(recordAudioBufferSize * bytesPerSample)
 
                 val timeNsOffsetPart = timeNsOffset + 1
                 val dataOffsetPart = timeNsOffsetPart * audioBufferSize
 
-                timeNsBuffer.copyInto(
-                    timeNsInChronologicalOrder,
-                    0,
-                    timeNsOffsetPart,
-                    recordAudioSamplesCount
-                )
-                timeNsBuffer.copyInto(
-                    timeNsInChronologicalOrder,
-                    recordAudioSamplesCount - timeNsOffsetPart,
-                    0,
-                    timeNsOffsetPart
-                )
 
                 for (short in shortBuffer.slice(dataOffsetPart until recordAudioBufferSize)) {
                     byteBuffer.putShort(short.reverseBytes())

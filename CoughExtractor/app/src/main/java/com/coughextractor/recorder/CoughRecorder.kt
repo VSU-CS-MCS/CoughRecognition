@@ -13,4 +13,5 @@ interface CoughRecorder<TRead> {
     var baseDir: String
     var examination: Examination
     var soundAmplitudeThreshold: Int
+    var accelerometerThreshold: Int
 }

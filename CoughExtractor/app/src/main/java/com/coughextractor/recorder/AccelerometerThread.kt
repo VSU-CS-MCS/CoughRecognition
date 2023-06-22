@@ -11,6 +11,7 @@ import java.util.UUID
 import kotlin.math.abs
 
 class AccelerometerThread : Thread() {
+    var threshold: Int = 35
     var isCough: Boolean = false
     var isConnected: Boolean = false
     lateinit var bluetoothAdapter: BluetoothAdapter
@@ -84,8 +85,9 @@ class AccelerometerThread : Thread() {
                 Log.e("X", x.toString())
                 Log.e("Y", y.toString())
                 Log.e("ADC", adc.toString())
+                Log.e("threshold", threshold.toString())
 
-                this.isCough = (x >= 35 || y >= 35) && adc >= 35
+                this.isCough = (x >= threshold || y >= threshold) && adc >= threshold
                 onAccelerometerUpdate(currentAccelerometer.ADC.toShort())
                 onAccelerometerXUpdate(currentAccelerometer.Xa.toShort())
                 onAccelerometerYUpdate(currentAccelerometer.Ya.toShort())

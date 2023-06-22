@@ -3,9 +3,9 @@
     <string name="app_name_rus">Детектор Кашля</string>
 
     <string name="amplitude_label">Предел звука:</string>
-    <string name="accelerometer_label">Предел акселерометра:</string>
+    <string name="accelerometer_label">Максимальный скачок акселерометрии(%):</string>
     <string name="chart_amplitude_label">Амплитуда звука:</string>
-    <string name="chart_accelerometer_label">Амплитуда акселерометрии:</string>
+    <string name="chart_accelerometer_label">Амплитуда грудной клетки:</string>
     <string name="x_chart_accelerometer_label">X ускорение акселерометра:</string>
     <string name="y_chart_accelerometer_label">Y ускорение акселерометра:</string>
 

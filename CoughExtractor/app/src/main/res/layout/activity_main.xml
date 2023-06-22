@@ -88,6 +88,36 @@
                     app:layout_constraintTop_toBottomOf="@+id/textViewAmplitude" />
 
                 <TextView
+                    android:id="@+id/accelerometerThresholdText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/accelerometer_label"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/soundAmplitude"
+                    app:layout_constraintBottom_toTopOf="@id/accelerometerThreshold"/>
+
+                <EditText
+                    android:id="@+id/accelerometerThreshold"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginBottom="8dp"
+                    android:height="24dp"
+                    android:importantForAutofill="noExcludeDescendants"
+                    android:inputType="number"
+                    android:text="@={viewModel.accelerometerAmplitude}"
+                    app:layout_constraintBottom_toTopOf="@+id/textViewMaxAmplitude"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@+id/accelerometerThresholdText" />
+
+                <TextView
                     android:id="@+id/textViewMaxAmplitude"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

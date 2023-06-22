@@ -8,11 +8,14 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.IBinder
+import android.text.InputFilter
+import android.text.Spanned
 import android.util.Log
 import android.view.View
 import android.widget.AdapterView
 import android.widget.AdapterView.OnItemSelectedListener
 import android.widget.ArrayAdapter
+import android.widget.EditText
 import android.widget.Spinner
 import androidx.appcompat.app.AppCompatActivity
 import androidx.databinding.DataBindingUtil
@@ -39,7 +42,43 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.timer
 
+
 private const val REQUEST_PERMISSION_CODE = 200
+
+class InputFilterMinMax : InputFilter {
+    private var min: Int
+    private var max: Int
+
+    constructor(min: Int, max: Int) {
+        this.min = min
+        this.max = max
+    }
+
+    constructor(min: String, max: String) {
+        this.min = min.toInt()
+        this.max = max.toInt()
+    }
+
+    override fun filter(
+        source: CharSequence,
+        start: Int,
+        end: Int,
+        dest: Spanned,
+        dstart: Int,
+        dend: Int
+    ): String? {
+        try {
+            val input = (dest.toString() + source.toString()).toInt()
+            if (isInRange(min, max, input)) return null
+        } catch (nfe: NumberFormatException) {
+        }
+        return ""
+    }
+
+    private fun isInRange(a: Int, b: Int, c: Int): Boolean {
+        return if (b > a) c >= a && c <= b else c >= b && c <= a
+    }
+}
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -185,8 +224,11 @@ class MainActivity : AppCompatActivity() {
             )
         binding.viewModel = viewModel
         binding.lifecycleOwner = this@MainActivity
-        val audioChart = findViewById<View>(R.id.chart) as LineChart
 
+        val et = findViewById<View>(R.id.accelerometerThreshold) as EditText
+        et.filters = arrayOf<InputFilter>(InputFilterMinMax("1", "100"))
+
+        val audioChart = findViewById<View>(R.id.chart) as LineChart
         val amplitudesEntries: MutableList<Entry> =
             ArrayList(viewModel.amplitudesLength)
         val amplitudesDataSet =

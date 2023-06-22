@@ -108,7 +108,7 @@ class MainViewModel @ViewModelInject constructor(
     var token: String = ""
     var examination: Examination = Examination()
 
-    var soundAmplitude: String
+    var soundAmplitude: String = "7000"
         get() {
             return serviceBinder?.getSoundAmplitudeThreshold().toString()
         }
@@ -119,11 +119,27 @@ class MainViewModel @ViewModelInject constructor(
             }
             serviceBinder?.setSoundAmplitudeThreshold(v)
             soundAmplitudeObservable.postValue(v)
+            field = v.toString()
         }
 
     val soundAmplitudeObservable: MutableLiveData<Int?> by lazy {
         MutableLiveData<Int?>(soundAmplitude.toInt())
     }
+    var accelerometerAmplitude: String = "35"
+        get() {
+            return serviceBinder?.getAccelerometerThreshold().toString()
+        }
+        set(value) {
+            var v = value.toIntOrNull()
+            if (v == null || v < 0) {
+                v = 0
+            }
+            if (v > 100) {
+                v = 100
+            }
+            serviceBinder?.setAccelerometerThreshold(v)
+            field = v.toString()
+        }
 
     val amplitudesLock = Object()
     val accelerometerLock = Object()
