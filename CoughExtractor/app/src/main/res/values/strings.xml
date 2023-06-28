@@ -1,6 +1,23 @@
 <resources>
-    <string name="app_name">CoughExtractor</string>
+    <string name="app_name">Cough Detector</string>
+    <string name="app_name_rus">Детектор Кашля</string>
 
-    <string name="amplitude_label">Предел амплитуды звука:</string>
+    <string name="amplitude_label">Предел звука:</string>
+    <string name="accelerometer_label">Максимальный скачок акселерометрии(%):</string>
     <string name="chart_amplitude_label">Амплитуда звука:</string>
+    <string name="chart_accelerometer_label">Амплитуда грудной клетки:</string>
+    <string name="x_chart_accelerometer_label">X ускорение акселерометра:</string>
+    <string name="y_chart_accelerometer_label">Y ускорение акселерометра:</string>
+
+    <string name="bgImage">bgImage</string>
+    <string name="password">Password</string>
+    <string name="enterUsernameText">Введите имя пользователя</string>
+    <string name="enterHostText">Введите адрес сервера</string>
+    <string name="rememberMeText">Запомнить меня</string>
+    <string name="enterPasswordText">Введите пароль</string>
+    <string name="passwordText">Пароль:</string>
+    <string name="usernameText">Имя пользователя:</string>
+    <string name="hostText">Адрес сервера(Ip:Port):</string>
+    <string name="loginText">Войти</string>
+    <string name="AppNameRus">Детектор кашля</string>
 </resources>
